@@ -2,6 +2,10 @@ defmodule Tuix.Input do
   @moduledoc """
   Reads raw bytes from stdin in a blocking loop and sends parsed key events
   to the runtime as `{:tuix_input, %Tuix.Event.Key{}}` messages.
+
+  In `{:noshell, :raw}` mode, `:io.get_chars/3` returns as soon as any data
+  is available (up to the requested maximum). This is the pattern documented
+  in OTP's [terminal interface guide](https://www.erlang.org/doc/apps/stdlib/terminal_interface.html).
   """
 
   alias Tuix.Input.Parser

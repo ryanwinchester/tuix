@@ -42,6 +42,8 @@ defmodule Tuix do
   """
   @spec run(module(), keyword()) :: :ok
   def run(module, opts \\ []) when is_atom(module) do
+    ensure_supported_terminal!()
+
     children = [
       Tuix.Terminal,
       {Tuix.Runtime, Keyword.put(opts, :module, module)}
@@ -57,5 +59,33 @@ defmodule Tuix do
         Supervisor.stop(supervisor)
         :ok
     end
+  end
+
+  defp ensure_supported_terminal! do
+    otp_release = String.to_integer(System.otp_release())
+
+    if otp_release < 29 do
+      raise RuntimeError,
+            "Tuix requires Erlang/OTP 29 or later (found OTP #{otp_release}). " <>
+              "OTP 29 provides :io_ansi and SIGWINCH handling."
+    end
+
+    case ansi_enabled?() do
+      false ->
+        raise RuntimeError,
+              "the terminal does not support ANSI escape sequences " <>
+                "(TERM=#{System.get_env("TERM") || "unset"})"
+
+      _true_or_unknown ->
+        :ok
+    end
+  end
+
+  # :io_ansi.enabled/0 raises when stdio is not a tty; in that case raw mode
+  # setup will surface its own failure, so treat it as unknown and proceed.
+  defp ansi_enabled? do
+    :io_ansi.enabled()
+  catch
+    _, _ -> :unknown
   end
 end

@@ -36,11 +36,12 @@ defmodule Tuix.Runtime do
       app: app,
       size: {width, height},
       prev_buffer: nil,
-      exit_on_ctrl_c: exit_on_ctrl_c
+      exit_on_ctrl_c: exit_on_ctrl_c,
+      resize: subscribe_resize()
     }
 
     {:ok, _reader} = Tuix.Input.start_link(self())
-    Process.send_after(self(), :tuix_resize_poll, @resize_poll_ms)
+    if state.resize == :poll, do: schedule_resize_poll()
 
     {:ok, render_frame(state)}
   end
@@ -57,8 +58,8 @@ defmodule Tuix.Runtime do
     dispatch(state, fn -> state.module.handle_event(event, state.app) end)
   end
 
-  def handle_info(:tuix_resize_poll, state) do
-    Process.send_after(self(), :tuix_resize_poll, @resize_poll_ms)
+  def handle_info(:tuix_check_resize, state) do
+    if state.resize == :poll, do: schedule_resize_poll()
 
     case Terminal.size() do
       size when size == state.size ->
@@ -72,11 +73,42 @@ defmodule Tuix.Runtime do
     end
   end
 
+  # The SIGWINCH handler was removed (crashed or the signal server restarted);
+  # fall back to polling so resizes are still detected.
+  def handle_info({:gen_event_EXIT, Tuix.Runtime.SignalHandler, _reason}, state) do
+    schedule_resize_poll()
+    {:noreply, %{state | resize: :poll}}
+  end
+
   def handle_info(message, state) do
     dispatch(state, fn -> state.module.handle_info(message, state.app) end)
   end
 
   ## Helpers
+
+  # Prefers SIGWINCH delivery (available on Unix as of OTP 29) and falls
+  # back to polling (Windows, or restricted environments). The handler is
+  # supervised: if it dies, the runtime receives :gen_event_EXIT and
+  # switches to polling.
+  defp subscribe_resize do
+    with :ok <- set_sigwinch(),
+         :ok <-
+           :gen_event.add_sup_handler(:erl_signal_server, Tuix.Runtime.SignalHandler, self()) do
+      :signal
+    else
+      _ -> :poll
+    end
+  end
+
+  defp set_sigwinch do
+    :os.set_signal(:sigwinch, :handle)
+  catch
+    _, _ -> :error
+  end
+
+  defp schedule_resize_poll do
+    Process.send_after(self(), :tuix_check_resize, @resize_poll_ms)
+  end
 
   defp dispatch(state, fun) do
     case fun.() do

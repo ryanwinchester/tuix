@@ -63,7 +63,11 @@ Try it: `mix run examples/counter.exs`
 ## Requirements
 
 - Elixir 1.15+
-- Erlang/OTP 26+ (for raw terminal mode via `:shell.start_interactive/1`)
+- Erlang/OTP 29+
+
+OTP 29 provides raw terminal mode (`:shell.start_interactive/1`), the
+terminfo-aware `:io_ansi` module used for terminal setup and capability
+detection, and `SIGWINCH` delivery for resize events.
 
 ## Installation
 
@@ -143,8 +147,8 @@ individual cells and their styles.
 - **Full-tree re-render per state change** is the LiveView-style trade-off:
   simple mental model, no manual invalidation. The frame diff keeps terminal
   writes minimal regardless.
-- **Resize detection polls** every 250ms; the BEAM has no portable
-  `SIGWINCH` delivery.
+- **Resize detection** uses `SIGWINCH` where the OTP/platform supports it
+  (`:os.set_signal/2`), falling back to 250ms polling elsewhere.
 - **Wide-character edge case:** a continuation cell changing without its
   head cell is not repainted. This only occurs when new content partially
   overlaps a wide grapheme.

@@ -3,12 +3,16 @@ defmodule Tuix.Terminal do
   Owns the terminal: switches it into raw mode and the alternate screen on
   start, and restores it on shutdown — including crash shutdowns.
 
-  Requires OTP 26+ for `:shell.start_interactive({:noshell, :raw})`.
+  Requires OTP 29+ (raw mode via `:shell.start_interactive/1` and
+  `:io_ansi`).
+
+  Static terminal control (alternate screen, cursor visibility, keypad
+  transmit mode) goes through OTP 29's `:io_ansi`, which uses the local
+  terminfo database and strips sequences the terminal does not support.
+  Frame rendering writes precomposed iodata (see `Tuix.Terminal.ANSI`).
   """
 
   use GenServer
-
-  alias Tuix.Terminal.ANSI
 
   @restore_flag {__MODULE__, :needs_restore}
 
@@ -50,11 +54,11 @@ defmodule Tuix.Terminal do
     enter_raw_mode()
     :io.setopts(:standard_io, binary: true)
 
-    IO.write([
-      ANSI.enter_alternate_screen(),
-      ANSI.hide_cursor(),
-      ANSI.clear_screen(),
-      ANSI.home()
+    :io_ansi.fwrite([
+      :alternate_screen,
+      :cursor_hide,
+      :keypad_transmit_mode,
+      :clear
     ])
 
     # Belt and suspenders: restore even if the VM exits without a clean
@@ -99,11 +103,17 @@ defmodule Tuix.Terminal do
     if :persistent_term.get(@restore_flag, false) do
       :persistent_term.put(@restore_flag, false)
 
-      IO.write([
-        ANSI.reset(),
-        ANSI.show_cursor(),
-        ANSI.exit_alternate_screen()
-      ])
+      try do
+        :io_ansi.fwrite([
+          :reset,
+          :keypad_transmit_mode_off,
+          :cursor_show,
+          :alternate_screen_off
+        ])
+      catch
+        # The tty may already be gone during VM shutdown.
+        _, _ -> :ok
+      end
 
       exit_raw_mode()
     end
