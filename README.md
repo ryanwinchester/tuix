@@ -100,9 +100,11 @@ nothing.
 ```elixir
 box border: :single, flex_direction: :row, gap: 2, padding: 1 do
   text("left", fg: :cyan)
+
   box flex_grow: 1 do
     text("stretches to fill the remaining space")
   end
+
   text("right", attrs: [:bold, :underline])
 end
 ```
