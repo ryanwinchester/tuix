@@ -281,6 +281,10 @@ mix docs
 
 Once published, the docs can be found at <https://hexdocs.pm/tuix>.
 
+## Demo video
+
+https://github.com/user-attachments/assets/080ae9b3-78fd-4cd9-afeb-1ea8e047054b
+
 ## License
 
 Copyright 2026 Ryan Winchester
