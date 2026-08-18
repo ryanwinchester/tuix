@@ -13,8 +13,12 @@ defmodule Tuix.AppTest do
     end
 
     @impl true
-    def handle_event(%Tuix.Event.Key{key: "+"}, app) do
+    def handle_event(%Tuix.Event.Key{key: :up}, app) do
       {:noreply, update(app, :count, &(&1 + 1))}
+    end
+
+    def handle_event(%Tuix.Event.Key{key: :down}, app) do
+      {:noreply, update(app, :count, &(&1 - 1))}
     end
 
     def handle_event(%Tuix.Event.Key{key: "q"}, app), do: {:stop, :normal, app}
@@ -88,9 +92,12 @@ defmodule Tuix.AppTest do
   test "event flow updates state" do
     {:ok, app} = Counter.mount([], %App{module: Counter})
 
-    {:noreply, app} = Counter.handle_event(%Tuix.Event.Key{key: "+"}, app)
-    {:noreply, app} = Counter.handle_event(%Tuix.Event.Key{key: "+"}, app)
+    {:noreply, app} = Counter.handle_event(%Tuix.Event.Key{key: :up}, app)
+    {:noreply, app} = Counter.handle_event(%Tuix.Event.Key{key: :up}, app)
     assert app.assigns.count == 2
+
+    {:noreply, app} = Counter.handle_event(%Tuix.Event.Key{key: :down}, app)
+    assert app.assigns.count == 1
 
     assert {:stop, :normal, _app} = Counter.handle_event(%Tuix.Event.Key{key: "q"}, app)
   end

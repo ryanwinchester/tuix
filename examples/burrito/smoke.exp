@@ -1,0 +1,51 @@
+#!/usr/bin/expect -f
+set timeout 30
+spawn ./burrito_out/counter_macos_silicon
+
+# Consume pending output until the stream is quiet for 1s.
+proc drain {} {
+    while {1} {
+        expect {
+            -timeout 1
+            -re {.+} { continue }
+            timeout { break }
+        }
+    }
+}
+
+expect {
+    "Count: 0" { puts "\n\[SMOKE\] initial frame OK" }
+    timeout { puts "\n\[SMOKE\] FAIL: no initial frame"; exit 1 }
+}
+drain
+
+set timeout 10
+send "\x1b\[A"
+expect {
+    -re {1} { puts "\n\[SMOKE\] up-arrow increment OK" }
+    timeout { puts "\n\[SMOKE\] FAIL: no reaction to up arrow"; exit 1 }
+}
+drain
+
+send "\x1b\[A"
+expect {
+    -re {2} { puts "\n\[SMOKE\] second increment OK" }
+    timeout { puts "\n\[SMOKE\] FAIL: no second increment"; exit 1 }
+}
+drain
+
+send "\x1b\[B"
+expect {
+    -re {1} { puts "\n\[SMOKE\] down-arrow decrement OK" }
+    timeout { puts "\n\[SMOKE\] FAIL: no decrement"; exit 1 }
+}
+drain
+
+send "q"
+expect {
+    eof { puts "\n\[SMOKE\] clean exit on q OK" }
+    timeout { puts "\n\[SMOKE\] FAIL: did not exit on q"; exit 1 }
+}
+catch wait result
+puts "\[SMOKE\] exit code: [lindex $result 3]"
+exit [lindex $result 3]

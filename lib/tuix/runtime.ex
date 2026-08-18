@@ -456,7 +456,10 @@ defmodule Tuix.Runtime do
   defp call_mount(module, opts) do
     app = %App{module: module}
 
-    if function_exported?(module, :mount, 2) do
+    # function_exported?/3 does not load the module, and in interactive
+    # mode (e.g. some packaged binaries) it may not be loaded yet — which
+    # would silently skip mount/2.
+    if Code.ensure_loaded?(module) and function_exported?(module, :mount, 2) do
       module.mount(Keyword.drop(opts, [:module, :exit_on_ctrl_c, :mouse]), app)
     else
       {:ok, app}

@@ -42,7 +42,7 @@ defmodule Tuix.MixProject do
   defp docs do
     [
       main: "readme",
-      extras: ["README.md"],
+      extras: ["README.md", "guides/packaging.md"],
       source_url: @source_url,
       source_ref: "v#{@version}"
     ]

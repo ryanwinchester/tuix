@@ -21,8 +21,12 @@ defmodule Counter do
   end
 
   @impl true
-  def handle_event(%Tuix.Event.Key{key: "+"}, app) do
+  def handle_event(%Tuix.Event.Key{key: :up}, app) do
     {:noreply, update(app, :count, &(&1 + 1))}
+  end
+
+  def handle_event(%Tuix.Event.Key{key: :down}, app) do
+    {:noreply, update(app, :count, &(&1 - 1))}
   end
 
   def handle_event(%Tuix.Event.Key{key: "q"}, app) do
@@ -35,7 +39,7 @@ defmodule Counter do
   def render(assigns) do
     box border: :rounded, title: "Counter", padding: 1, gap: 1 do
       text "Count: #{assigns.count}", fg: "#00FF00", attrs: [:bold]
-      text "Press + to increment, q to quit", fg: :bright_black
+      text "Press ↑/↓ to change, q to quit", fg: :bright_black
     end
   end
 end
@@ -60,6 +64,7 @@ Try it: `mix run examples/counter.exs`
   - [Selects](#selects)
   - [Scroll boxes](#scroll-boxes)
   - [Testing](#testing)
+- [Packaging](#packaging)
 - [Design notes and known trade-offs](#design-notes-and-known-trade-offs)
 - [Roadmap](#roadmap)
 - [Documentation](#documentation)
@@ -337,6 +342,15 @@ end
 
 `render/4` returns the underlying `Tuix.Buffer` for structured assertions on
 individual cells and their styles.
+
+## Packaging
+
+Tuix apps ship as plain OTP releases (`mix release`) or as single self-contained
+executables built with [Burrito](https://github.com/burrito-elixir/burrito).
+Tuix is pure Elixir, so there are no NIFs to cross-compile. See the
+[packaging guide](guides/packaging.md) for the application entry-point
+pattern and current Burrito caveats, and [`examples/burrito`](https://github.com/ryanwinchester/tuix/tree/main/examples/burrito)
+for a complete working project.
 
 ## Design notes and known trade-offs
 

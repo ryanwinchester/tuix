@@ -15,8 +15,11 @@ defmodule Tuix.App do
         def mount(_opts, app), do: {:ok, assign(app, count: 0)}
 
         @impl true
-        def handle_event(%Tuix.Event.Key{key: "+"}, app),
+        def handle_event(%Tuix.Event.Key{key: :up}, app),
           do: {:noreply, update(app, :count, &(&1 + 1))}
+
+        def handle_event(%Tuix.Event.Key{key: :down}, app),
+          do: {:noreply, update(app, :count, &(&1 - 1))}
 
         def handle_event(%Tuix.Event.Key{key: "q"}, app),
           do: {:stop, :normal, app}

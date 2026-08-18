@@ -1,0 +1,5 @@
+/_build/
+/deps/
+/burrito_out/
+/mix.lock
+erl_crash.dump

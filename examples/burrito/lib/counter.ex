@@ -1,5 +1,9 @@
-# Run with: mix run examples/counter.exs
 defmodule Counter do
+  @moduledoc """
+  The counter from `examples/counter.exs`, packaged as a standalone
+  binary with Burrito. See the README in this directory.
+  """
+
   use Tuix.App
 
   @impl true
@@ -24,11 +28,9 @@ defmodule Counter do
 
   @impl true
   def render(assigns) do
-    box border: :rounded, title: "Counter", padding: 1, flex_direction: :column, gap: 1 do
+    box border: :rounded, title: "Counter", padding: 1, gap: 1 do
       text "Count: #{assigns.count}", fg: "#00FF00", attrs: [:bold]
-      text "Press ↑/↓ to change, q or Ctrl+C to quit", fg: :bright_black
+      text "Press ↑/↓ to change, q to quit", fg: :bright_black
     end
   end
 end
-
-Tuix.run(Counter)
