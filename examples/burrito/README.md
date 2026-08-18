@@ -61,7 +61,9 @@ Notes:
 ## Known upstream issues (Burrito 1.6.0)
 
 As of Burrito 1.6.0 this example does **not** work with the stock Hex
-package. Three upstream bugs affect TUI apps; all are reported:
+package. Three upstream bugs affect TUI apps; all are reported, and
+[tuix#12](https://github.com/ryanwinchester/tuix/issues/12) tracks
+their status:
 
 1. [burrito#215](https://github.com/burrito-elixir/burrito/issues/215) -
    Burrito's precompiled ERTS builds lack tty support (raw mode returns

@@ -44,7 +44,7 @@ defmodule Tuix.MixProject do
       main: "readme",
       extras: ["README.md", "guides/packaging.md"],
       source_url: @source_url,
-      source_ref: "v#{@version}"
+      source_ref: "master"
     ]
   end
 end

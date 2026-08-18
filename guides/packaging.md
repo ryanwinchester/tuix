@@ -141,7 +141,9 @@ during development.
 ### Known upstream issues (Burrito 1.6.0)
 
 As of Burrito 1.6.0, TUI apps do not work out of the box in Burrito
-binaries. Three upstream bugs are involved; all are reported:
+binaries. Three upstream bugs are involved; all are reported, and
+[tuix#12](https://github.com/ryanwinchester/tuix/issues/12) tracks
+their status:
 
 1. [burrito#215](https://github.com/burrito-elixir/burrito/issues/215) —
    Burrito's precompiled ERTS builds lack tty support: raw mode returns
