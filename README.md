@@ -55,6 +55,7 @@ Try it: `mix run examples/counter.exs`
   - [Components](#components)
   - [Events](#events)
   - [Focus](#focus)
+  - [Mouse](#mouse)
   - [Inputs](#inputs)
   - [Selects](#selects)
   - [Scroll boxes](#scroll-boxes)
@@ -74,6 +75,9 @@ Try it: `mix run examples/counter.exs`
   conditionals and comprehensions compose naturally inside `do` blocks.
 - **Keyboard focus** - mark boxes `focusable` and Tab / Shift+Tab traversal,
   focus styling, and per-element event targeting come for free.
+- **Mouse support** - clicks focus focusable elements, and every press,
+  release, drag, and wheel event reaches the app with the element under
+  the pointer as `target`.
 - **Text input** - a controlled, grapheme-aware single-line input with
   cursor, placeholder, masking, and horizontal scrolling; edits arrive as
   events and the app owns the value.
@@ -159,15 +163,16 @@ named atoms (`:red`, `:bright_cyan`, ...).
 
 Keyboard input arrives as `%Tuix.Event.Key{}` with a `key` (a grapheme like
 `"a"` or a named atom like `:up`, `:enter`, `:escape`) and `ctrl` / `alt` /
-`shift` modifier flags. Terminal resizes arrive as `%Tuix.Event.Resize{}`
-and automatically reflow the layout.
+`shift` modifier flags. Mouse input arrives as `%Tuix.Event.Mouse{}` (see
+[Mouse](#mouse)). Terminal resizes arrive as `%Tuix.Event.Resize{}` and
+automatically reflow the layout.
 
 ### Focus
 
 Boxes with `focusable: true` and a stable `:id` join the focus ring. The
-runtime cycles focus with Tab / Shift+Tab (in document order, wrapping),
-applies `focus_border_color` / `focus_bg` to the focused element, and stamps
-every key event with the focused id as `target`:
+runtime cycles focus with Tab / Shift+Tab (in document order, wrapping) and
+moves it on mouse click, applies `focus_border_color` / `focus_bg` to the
+focused element, and stamps every key event with the focused id as `target`:
 
 ```elixir
 def render(assigns) do
@@ -197,6 +202,34 @@ automatically; use `focus_within_border_color` / `focus_within_bg` to style
 ancestors differently from the focused element itself.
 
 Try it: `mix run examples/focus.exs`
+
+### Mouse
+
+Mouse reporting is on by default. Clicking a focusable element focuses it
+(delivering the usual `%Tuix.Event.Focus{}` event), and the wheel scrolls
+the scroll box under the pointer - those ticks are consumed by the
+framework, like keyboard scrolling. Everything else (and wheel events away
+from any scroll box) reaches `handle_event/2` as a `%Tuix.Event.Mouse{}`
+with:
+
+- `kind` - `:press`, `:release`, `:drag` (pointer moved with a button
+  held), `:scroll_up`, or `:scroll_down`
+- `button` - `:left`, `:middle`, `:right`, or `nil` (wheel events)
+- `x` / `y` - 0-based cell coordinates
+- `ctrl` / `alt` / `shift` modifier flags
+- `target` - the id of the innermost focusable element under the pointer
+  (`nil` when none), so apps can pattern match per element:
+
+```elixir
+def handle_event(%Tuix.Event.Mouse{kind: :press, target: :sidebar}, app), do: ...
+```
+
+While mouse reporting is active the terminal's native text selection is
+unavailable; pass `mouse: false` to `Tuix.run/2` to keep it:
+
+```elixir
+Tuix.run(MyApp, mouse: false)
+```
 
 ### Inputs
 
@@ -260,10 +293,12 @@ Try it: `mix run examples/select.exs`
 their full height and scrolled vertically within the box. It is built on
 the focus model: Tab into it (or `autofocus` it) and `:up` / `:down`
 scroll by a row, `:page_up` / `:page_down` by a viewport, and `:home` /
-`:end` jump to the boundaries. The offset is framework-managed - like an
-input's cursor, no event reaches the app and there is nothing to assign
-back. When the content overflows, a proportional scrollbar is drawn in the
-rightmost column (over the border, when the box has one):
+`:end` jump to the boundaries. The mouse wheel scrolls the box under the
+pointer (three rows per tick) without focusing it. The offset is
+framework-managed - like an input's cursor, no event reaches the app and
+there is nothing to assign back. When the content overflows, a
+proportional scrollbar is drawn in the rightmost column (over the border,
+when the box has one):
 
 ```elixir
 def render(assigns) do
@@ -308,16 +343,17 @@ individual cells and their styles.
 - **Wide-character edge case:** a continuation cell changing without its
   head cell is not repainted. This only occurs when new content partially
   overlaps a wide grapheme.
-- **No mouse support yet** - see the roadmap.
+- **Mouse capture vs. text selection:** enabling mouse reporting (the
+  default) disables the terminal's native text selection; opt out with
+  `mouse: false`.
 
 ## Roadmap
 
-- Mouse support
 - `justify_content` / `align_items` / wrapping in the layout engine
 - Select enhancements: multi-select, typeahead/filtering, wrap-around
-  navigation, `PageUp` / `PageDown`
+  navigation, `PageUp` / `PageDown`, click-to-select an option
 - ScrollBox enhancements: scroll-into-view for focused descendants,
-  horizontal scrolling, mouse-wheel scrolling (needs mouse support)
+  horizontal scrolling, scrollbar dragging
 - Dropdown/overlay presentation for selects (needs z-order/overlay
   machinery)
 - Input enhancements: readline-style ctrl bindings, `max_length`, real

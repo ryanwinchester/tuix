@@ -7,10 +7,11 @@ defmodule Tuix.Components.ScrollBox do
   Scroll boxes are built on the focus model: focus one (Tab traversal or
   `autofocus`) and `:up` / `:down` scroll by a row, `:page_up` /
   `:page_down` by a viewport, and `:home` / `:end` jump to the boundaries.
-  The offset is ephemeral framework state (like an input's cursor): no
-  event reaches the app and there is nothing to assign back. Scrolling is
-  clamped (boundary presses are consumed); everything else falls through
-  to the app with `target` set.
+  The mouse wheel scrolls the scroll box under the pointer (see `wheel/2`)
+  without focusing it. The offset is ephemeral framework state (like an
+  input's cursor): no event reaches the app and there is nothing to assign
+  back. Scrolling is clamped (boundary presses and wheel ticks are
+  consumed); everything else falls through to the app with `target` set.
 
   The stored state is `%{offset: n, viewport: h, max_offset: m}` — the
   runtime refreshes `viewport` and `max_offset` from each layout (see
@@ -59,6 +60,23 @@ defmodule Tuix.Components.ScrollBox do
   end
 
   def on_key(%Key{}, _props, _state), do: :ignored
+
+  @wheel_step 3
+
+  @doc """
+  Scrolls the state by a mouse-wheel tick (#{@wheel_step} rows), clamped to
+  the scrollable range.
+
+  Unsynced state (before the first layout) behaves like keyboard
+  scrolling: a consumed no-op.
+  """
+  @spec wheel(:scroll_up | :scroll_down, state() | nil) :: state()
+  def wheel(kind, state) when kind in [:scroll_up, :scroll_down] do
+    %{offset: offset, max_offset: max_offset} = state = normalize(state)
+    delta = if kind == :scroll_up, do: -@wheel_step, else: @wheel_step
+
+    %{state | offset: (offset + delta) |> min(max_offset) |> max(0)}
+  end
 
   @impl Tuix.Component
   def mark_props(props, state) do

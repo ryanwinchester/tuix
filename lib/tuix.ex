@@ -37,6 +37,10 @@ defmodule Tuix do
   ## Options
 
     * `:exit_on_ctrl_c` - stop the app when Ctrl+C is pressed (default `true`)
+    * `:mouse` - enable mouse reporting (default `true`). Delivers
+      `Tuix.Event.Mouse` events and click-to-focus, but the terminal's
+      native text selection is disabled while the app runs; pass `false`
+      to keep it.
 
   All other options are passed through to the app's `c:Tuix.App.mount/2`.
   """
@@ -45,7 +49,7 @@ defmodule Tuix do
     ensure_supported_terminal!()
 
     children = [
-      Tuix.Terminal,
+      {Tuix.Terminal, Keyword.take(opts, [:mouse])},
       {Tuix.Runtime, Keyword.put(opts, :module, module)}
     ]
 

@@ -2,6 +2,7 @@ defmodule Tuix.Input.ParserTest do
   use ExUnit.Case, async: true
 
   alias Tuix.Event.Key
+  alias Tuix.Event.Mouse
   alias Tuix.Input.Parser
 
   doctest Tuix.Input.Parser
@@ -74,5 +75,88 @@ defmodule Tuix.Input.ParserTest do
 
   test "multiple sequences in one chunk" do
     assert {[%Key{key: :up}, %Key{key: "q"}, %Key{key: :down}], ""} = Parser.parse("\e[Aq\e[B")
+  end
+
+  describe "SGR mouse reports" do
+    test "press and release translate to 0-based coordinates" do
+      assert {[%Mouse{kind: :press, button: :left, x: 9, y: 4}], ""} =
+               Parser.parse("\e[<0;10;5M")
+
+      assert {[%Mouse{kind: :release, button: :left, x: 9, y: 4}], ""} =
+               Parser.parse("\e[<0;10;5m")
+    end
+
+    test "middle and right buttons" do
+      assert {[%Mouse{kind: :press, button: :middle}], ""} = Parser.parse("\e[<1;1;1M")
+      assert {[%Mouse{kind: :press, button: :right}], ""} = Parser.parse("\e[<2;1;1M")
+    end
+
+    test "drag while a button is held" do
+      assert {[%Mouse{kind: :drag, button: :left, x: 3, y: 2}], ""} =
+               Parser.parse("\e[<32;4;3M")
+    end
+
+    test "wheel" do
+      assert {[%Mouse{kind: :scroll_up, button: nil, x: 0, y: 0}], ""} =
+               Parser.parse("\e[<64;1;1M")
+
+      assert {[%Mouse{kind: :scroll_down, button: nil}], ""} = Parser.parse("\e[<65;1;1M")
+    end
+
+    test "modifiers" do
+      assert {[%Mouse{kind: :press, button: :left, shift: true}], ""} =
+               Parser.parse("\e[<4;1;1M")
+
+      assert {[%Mouse{kind: :press, button: :left, alt: true}], ""} = Parser.parse("\e[<8;1;1M")
+
+      assert {[%Mouse{kind: :press, button: :left, ctrl: true}], ""} =
+               Parser.parse("\e[<16;1;1M")
+
+      assert {[%Mouse{kind: :scroll_up, ctrl: true}], ""} = Parser.parse("\e[<80;1;1M")
+    end
+
+    test "incomplete report is kept as rest" do
+      assert {[], "\e[<0;10"} = Parser.parse("\e[<0;10")
+      assert {[], "\e[<0;10;5"} = Parser.parse("\e[<0;10;5")
+    end
+
+    test "malformed report is dropped" do
+      assert {[], ""} = Parser.parse("\e[<0;10M")
+      assert {[], ""} = Parser.parse("\e[<0;;5M")
+    end
+
+    test "mixed with keys in one chunk" do
+      assert {[%Key{key: "a"}, %Mouse{kind: :press, x: 0, y: 0}, %Key{key: :up}], ""} =
+               Parser.parse("a\e[<0;1;1M\e[A")
+    end
+  end
+
+  describe "X10 mouse reports" do
+    test "press with byte-encoded coordinates" do
+      # cb = 32 (left press), cx = 33 (column 1), cy = 37 (row 5)
+      assert {[%Mouse{kind: :press, button: :left, x: 0, y: 4}], ""} =
+               Parser.parse(<<"\e[M", 32, 33, 37>>)
+    end
+
+    test "release does not report a button" do
+      assert {[%Mouse{kind: :release, button: nil, x: 0, y: 0}], ""} =
+               Parser.parse(<<"\e[M", 35, 33, 33>>)
+    end
+
+    test "wheel" do
+      assert {[%Mouse{kind: :scroll_up}], ""} = Parser.parse(<<"\e[M", 96, 33, 33>>)
+      assert {[%Mouse{kind: :scroll_down}], ""} = Parser.parse(<<"\e[M", 97, 33, 33>>)
+    end
+
+    test "incomplete report is kept as rest" do
+      assert {[], "\e[M"} = Parser.parse("\e[M")
+      assert {[], <<"\e[M", 32>>} = Parser.parse(<<"\e[M", 32>>)
+      assert {[], <<"\e[M", 32, 33>>} = Parser.parse(<<"\e[M", 32, 33>>)
+    end
+
+    test "payload bytes are not misparsed as keys" do
+      assert {[%Mouse{kind: :press}, %Key{key: "q"}], ""} =
+               Parser.parse(<<"\e[M", 32, 33, 33, "q">>)
+    end
   end
 end

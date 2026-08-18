@@ -64,6 +64,40 @@ defmodule Tuix.Components.ScrollBoxTest do
     end
   end
 
+  describe "wheel/2" do
+    test "scrolls by three rows per tick" do
+      assert ScrollBox.wheel(:scroll_up, @state) == %{@state | offset: 2}
+      assert ScrollBox.wheel(:scroll_down, @state) == %{@state | offset: 8}
+    end
+
+    test "clamps at the boundaries" do
+      assert ScrollBox.wheel(:scroll_up, %{@state | offset: 1}) == %{@state | offset: 0}
+      assert ScrollBox.wheel(:scroll_down, %{@state | offset: 9}) == %{@state | offset: 10}
+
+      assert ScrollBox.wheel(:scroll_up, %{@state | offset: 0}) == %{@state | offset: 0}
+      assert ScrollBox.wheel(:scroll_down, %{@state | offset: 10}) == %{@state | offset: 10}
+    end
+
+    test "unsynced (nil) state is a no-op at the top" do
+      assert ScrollBox.wheel(:scroll_up, nil) == %{offset: 0, viewport: 0, max_offset: 0}
+      assert ScrollBox.wheel(:scroll_down, nil) == %{offset: 0, viewport: 0, max_offset: 0}
+    end
+
+    test "wheel-up off the bottom unpins a snap: :bottom box" do
+      props = Map.put(@props, :snap, :bottom)
+      pinned = %{@state | offset: 10}
+
+      unpinned = ScrollBox.wheel(:scroll_up, pinned)
+
+      assert unpinned == %{@state | offset: 7}
+      assert ScrollBox.mark_props(props, unpinned) == %{scroll_offset: 7}
+
+      # Wheeling back down re-pins.
+      repinned = ScrollBox.wheel(:scroll_down, unpinned)
+      assert ScrollBox.mark_props(props, repinned) == %{scroll_offset: :bottom}
+    end
+  end
+
   describe "mark_props/2" do
     test "injects the stored offset" do
       assert ScrollBox.mark_props(@props, @state) == %{scroll_offset: 5}

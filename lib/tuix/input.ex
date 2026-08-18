@@ -1,7 +1,8 @@
 defmodule Tuix.Input do
   @moduledoc """
-  Reads raw bytes from stdin in a blocking loop and sends parsed key events
-  to the runtime as `{:tuix_input, %Tuix.Event.Key{}}` messages.
+  Reads raw bytes from stdin in a blocking loop and sends parsed key and
+  mouse events to the runtime as `{:tuix_input, event}` messages (see
+  `Tuix.Event.Key` and `Tuix.Event.Mouse`).
 
   In `{:noshell, :raw}` mode, `:io.get_chars/3` returns as soon as any data
   is available (up to the requested maximum). This is the pattern documented

@@ -2,9 +2,11 @@ defmodule Tuix.Runtime do
   @moduledoc """
   The event loop: holds the `Tuix.App` state, dispatches input and resize
   events to the app's callbacks, manages keyboard focus (Tab / Shift+Tab
-  traversal over `focusable` elements), routes keys to the focused
-  component element (see `Tuix.Component`), and re-renders after every
-  state change.
+  traversal over `focusable` elements, click-to-focus for mouse presses),
+  routes keys to the focused component element (see `Tuix.Component`),
+  stamps mouse events with the hit-tested target (see `Tuix.HitTest`),
+  scrolls the scroll box under the pointer on wheel events, and re-renders
+  after every state change.
 
   Rendering is event-driven — nothing is written to the terminal unless
   state may have changed, and only changed cells are written.
@@ -20,6 +22,7 @@ defmodule Tuix.Runtime do
   alias Tuix.Element
   alias Tuix.Event
   alias Tuix.Focus
+  alias Tuix.HitTest
   alias Tuix.Layout
   alias Tuix.Layout.Placed
   alias Tuix.Renderer
@@ -55,6 +58,7 @@ defmodule Tuix.Runtime do
       exit_on_ctrl_c: exit_on_ctrl_c,
       resize: subscribe_resize(),
       tree: nil,
+      placed: nil,
       focus_order: [],
       autofocused: false
     }
@@ -87,6 +91,31 @@ defmodule Tuix.Runtime do
 
     # dispatch/2 detects the focus change and delivers the Focus event.
     dispatch(state, fn -> {:noreply, app} end)
+  end
+
+  # The wheel scrolls the scroll box under the pointer — hover-based, no
+  # focus required. Consumed ticks (like keyboard scrolling) never reach
+  # the app; wheel events over anything else fall through with `target`
+  # set. Clamped boundary ticks leave the state unchanged, so no frame is
+  # rendered.
+  def handle_info({:tuix_input, %Event.Mouse{kind: kind} = event}, state)
+      when kind in [:scroll_up, :scroll_down] do
+    case HitTest.scroll_box_at(state.placed, {event.x, event.y}) do
+      nil ->
+        deliver_mouse(state, event)
+
+      id ->
+        scroll_state = ScrollBox.wheel(kind, component_state(state.app, id))
+        dispatch(state, fn -> {:noreply, put_component_state(state.app, id, scroll_state)} end)
+    end
+  end
+
+  # Mouse events are stamped with the hit-tested target (the innermost
+  # focusable element under the pointer). A left press on a focusable
+  # element focuses it — dispatch/2 detects the change and delivers the
+  # Focus event — and every mouse event reaches the app's handle_event/2.
+  def handle_info({:tuix_input, %Event.Mouse{} = event}, state) do
+    deliver_mouse(state, event)
   end
 
   # Keys are offered to the focused component first (input editing, select
@@ -196,6 +225,29 @@ defmodule Tuix.Runtime do
   defp stamp_target(%Event.Key{} = event, target), do: %{event | target: target}
   defp stamp_target(event, _target), do: event
 
+  # Stamps the hit-tested target, applies click-to-focus, and delivers the
+  # mouse event to the app.
+  defp deliver_mouse(state, %Event.Mouse{} = event) do
+    target = HitTest.focusable_at(state.placed, {event.x, event.y})
+    event = %{event | target: target}
+    app = click_focus(state.app, event, state.focus_order)
+
+    dispatch(state, fn -> state.module.handle_event(event, app) end)
+  end
+
+  # Click-to-focus: a left press on a focusable element moves focus to it.
+  # Clicking empty (or non-focusable) space does not blur.
+  defp click_focus(app, %Event.Mouse{kind: :press, button: :left, target: target}, order)
+       when target != nil do
+    if target in order and App.focused(app) != target do
+      App.focus(app, target)
+    else
+      app
+    end
+  end
+
+  defp click_focus(app, _event, _order), do: app
+
   ## Component routing
 
   defp route_to_component(state, %Event.Key{} = event, focused) do
@@ -303,7 +355,15 @@ defmodule Tuix.Runtime do
     buffer = Renderer.paint(placed, Buffer.new(width, height))
     Terminal.write(Renderer.to_iodata(buffer, state.prev_buffer))
 
-    %{state | app: app, tree: tree, focus_order: order, autofocused: true, prev_buffer: buffer}
+    %{
+      state
+      | app: app,
+        tree: tree,
+        placed: placed,
+        focus_order: order,
+        autofocused: true,
+        prev_buffer: buffer
+    }
   end
 
   # Scroll boxes keep their scroll position while unfocused, so every
@@ -385,7 +445,7 @@ defmodule Tuix.Runtime do
     app = %App{module: module}
 
     if function_exported?(module, :mount, 2) do
-      module.mount(Keyword.drop(opts, [:module, :exit_on_ctrl_c]), app)
+      module.mount(Keyword.drop(opts, [:module, :exit_on_ctrl_c, :mouse]), app)
     else
       {:ok, app}
     end

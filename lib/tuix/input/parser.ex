@@ -1,13 +1,20 @@
 defmodule Tuix.Input.Parser do
   @moduledoc """
   Incremental parser turning raw terminal input bytes into `Tuix.Event.Key`
-  structs.
+  and `Tuix.Event.Mouse` structs.
 
   `parse/1` returns `{events, rest}` where `rest` is an incomplete trailing
   escape sequence to be prepended to the next chunk of input.
+
+  Mouse reports are decoded from SGR encoding (`ESC [ < Cb ; Cx ; Cy M|m`,
+  mode 1006) with an X10 fallback (`ESC [ M` followed by three raw bytes)
+  for terminals that support button tracking but not SGR encoding.
   """
 
+  import Bitwise
+
   alias Tuix.Event.Key
+  alias Tuix.Event.Mouse
 
   @csi_final_range 0x40..0x7E
 
@@ -29,6 +36,19 @@ defmodule Tuix.Input.Parser do
   end
 
   defp do_parse(<<>>, events), do: {Enum.reverse(events), ""}
+
+  # X10 mouse reports: ESC [ M cb cx cy (all offset by 32). Terminals fall
+  # back to this encoding when they support button tracking (1002) but not
+  # SGR encoding (1006). Must precede the generic CSI clause: M is a CSI
+  # final byte, and the three payload bytes would otherwise be misparsed
+  # as keys.
+  defp do_parse(<<"\e[M", cb, cx, cy, rest::binary>>, events) do
+    do_parse(rest, prepend_event(x10_mouse_event(cb - 32, cx - 33, cy - 33), events))
+  end
+
+  defp do_parse(<<"\e[M", rest::binary>> = all, events) when byte_size(rest) < 3 do
+    {Enum.reverse(events), all}
+  end
 
   # CSI sequences: ESC [ params final
   defp do_parse(<<"\e[", rest::binary>> = all, events) do
@@ -103,6 +123,11 @@ defmodule Tuix.Input.Parser do
 
   defp take_csi(<<c, rest::binary>>, acc), do: take_csi(rest, <<acc::binary, c>>)
 
+  # SGR mouse reports: ESC [ < Cb ; Cx ; Cy M|m (press/drag/wheel vs release)
+  defp csi_event("<" <> params, final) when final in [?M, ?m] do
+    sgr_mouse_event(params, final)
+  end
+
   defp csi_event(params, final) do
     {key, modifier} = decode_csi(params, final)
     apply_modifier(key, modifier)
@@ -164,14 +189,68 @@ defmodule Tuix.Input.Parser do
   defp apply_modifier(nil, _modifier), do: nil
 
   defp apply_modifier(key, modifier) do
-    import Bitwise
-
     %Key{
       key: key,
       shift: (modifier &&& 1) == 1,
       alt: (modifier &&& 2) == 2,
       ctrl: (modifier &&& 4) == 4
     }
+  end
+
+  ## Mouse handling
+
+  # Cb encodes the button in the low 2 bits (3 = none), modifiers in bits
+  # 4/8/16 (shift/alt/ctrl), motion in bit 32, and wheel in bit 64. SGR
+  # coordinates are 1-based; X10 payload bytes are offset by 32.
+
+  defp sgr_mouse_event(params, final) do
+    with [cb, cx, cy] <- String.split(params, ";"),
+         {cb, ""} when cb >= 0 <- Integer.parse(cb),
+         {cx, ""} when cx >= 1 <- Integer.parse(cx),
+         {cy, ""} when cy >= 1 <- Integer.parse(cy) do
+      mouse_event(cb, cx - 1, cy - 1, final == ?m)
+    else
+      _ -> nil
+    end
+  end
+
+  # X10 has no distinct release final: low bits 3 signal the release
+  # (without reporting which button went up).
+  defp x10_mouse_event(cb, x, y) when cb >= 0 and x >= 0 and y >= 0 do
+    mouse_event(cb, x, y, (cb &&& 3) == 3)
+  end
+
+  defp x10_mouse_event(_cb, _x, _y), do: nil
+
+  defp mouse_event(cb, x, y, release?) do
+    {kind, button} = decode_mouse_button(cb, release?)
+
+    %Mouse{
+      kind: kind,
+      button: button,
+      x: x,
+      y: y,
+      shift: (cb &&& 4) == 4,
+      alt: (cb &&& 8) == 8,
+      ctrl: (cb &&& 16) == 16
+    }
+  end
+
+  defp decode_mouse_button(cb, release?) do
+    button =
+      case cb &&& 3 do
+        0 -> :left
+        1 -> :middle
+        2 -> :right
+        3 -> nil
+      end
+
+    cond do
+      (cb &&& 64) == 64 -> {if((cb &&& 1) == 1, do: :scroll_down, else: :scroll_up), nil}
+      release? -> {:release, button}
+      (cb &&& 32) == 32 -> {:drag, button}
+      true -> {:press, button}
+    end
   end
 
   defp ss3_event(final) do

@@ -32,6 +32,51 @@ defmodule Tuix.Event do
           }
   end
 
+  defmodule Mouse do
+    @moduledoc """
+    A mouse event.
+
+    `kind` is one of:
+
+      * `:press` / `:release` - a button went down / up
+      * `:drag` - the pointer moved while a button was held
+      * `:scroll_up` / `:scroll_down` - the wheel turned
+
+    `button` is `:left`, `:middle`, or `:right` (`nil` for wheel events and
+    releases that do not report a button). `x` and `y` are 0-based cell
+    coordinates.
+
+    `target` is the id of the innermost focusable element under the pointer
+    (`nil` when none), stamped by the runtime so apps can pattern match on
+    it:
+
+        def handle_event(%Mouse{kind: :press, target: :sidebar}, app), do: ...
+    """
+
+    defstruct kind: nil,
+              button: nil,
+              x: 0,
+              y: 0,
+              ctrl: false,
+              alt: false,
+              shift: false,
+              target: nil
+
+    @type kind :: :press | :release | :drag | :scroll_up | :scroll_down
+    @type button :: :left | :middle | :right | nil
+
+    @type t :: %__MODULE__{
+            kind: kind(),
+            button: button(),
+            x: non_neg_integer(),
+            y: non_neg_integer(),
+            ctrl: boolean(),
+            alt: boolean(),
+            shift: boolean(),
+            target: term() | nil
+          }
+  end
+
   defmodule Resize do
     @moduledoc "A terminal resize event."
 
@@ -89,5 +134,5 @@ defmodule Tuix.Event do
     @type t :: %__MODULE__{id: term() | nil, from: term() | nil}
   end
 
-  @type t :: Key.t() | Resize.t() | Input.t() | Select.t() | Focus.t()
+  @type t :: Key.t() | Mouse.t() | Resize.t() | Input.t() | Select.t() | Focus.t()
 end
