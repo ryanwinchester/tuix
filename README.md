@@ -1,5 +1,9 @@
 # Tuix
 
+[![CI](https://github.com/ryanwinchester/tuix/actions/workflows/ci.yml/badge.svg)](https://github.com/ryanwinchester/tuix/actions/workflows/ci.yml)
+[![Hex.pm](https://img.shields.io/hexpm/v/tuix.svg)](https://hex.pm/packages/tuix)
+[![Docs](https://img.shields.io/badge/hex-docs-blue.svg)](https://hexdocs.pm/tuix)
+
 A terminal UI framework for Elixir, inspired by [OpenTUI](https://opentui.com).
 
 Build declarative, component-based TUIs with a LiveView-style programming
