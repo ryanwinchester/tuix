@@ -135,4 +135,63 @@ defmodule Tuix.LayoutTest do
     placed = Layout.compute(tree, 20, 24)
     assert rects(placed) == [{0, 0, 20, 3}]
   end
+
+  test "scroll box children are laid out at full content height" do
+    tree =
+      scroll_box id: :log, border: :single, height: 4 do
+        for n <- 1..6, do: text("line #{n}")
+      end
+
+    placed = Layout.compute(tree, 20, 10)
+
+    assert placed.rect == {0, 0, 20, 4}
+    assert rects(placed) == for(n <- 0..5, do: {1, 1 + n, 6, 1})
+  end
+
+  test "borderless overflowing scroll box reserves the rightmost column" do
+    tree =
+      scroll_box id: :log, height: 2 do
+        text("aaaa")
+        text("bbbb")
+        text("cccc")
+      end
+
+    placed = Layout.compute(tree, 4, 10)
+    assert rects(placed) == [{0, 0, 3, 1}, {0, 1, 3, 1}, {0, 2, 3, 1}]
+  end
+
+  test "scroll box without overflow reserves nothing" do
+    tree =
+      scroll_box id: :log, height: 3 do
+        text("aaaa")
+        text("bbbb")
+      end
+
+    placed = Layout.compute(tree, 4, 10)
+    assert rects(placed) == [{0, 0, 4, 1}, {0, 1, 4, 1}]
+  end
+
+  test "scroll box intrinsic size matches a box" do
+    tree =
+      scroll_box id: :log, border: :single do
+        text("one")
+        text("two")
+      end
+
+    placed = Layout.compute(tree, 20, 24)
+    assert placed.rect == {0, 0, 20, 4}
+  end
+
+  test "gap counts toward scroll box content height" do
+    tree =
+      scroll_box id: :log, height: 2, gap: 1 do
+        text("aaaa")
+        text("bbbb")
+      end
+
+    placed = Layout.compute(tree, 5, 10)
+
+    # 2 rows + 1 gap = 3 > 2: overflows, so the scrollbar column is reserved.
+    assert rects(placed) == [{0, 0, 4, 1}, {0, 2, 4, 1}]
+  end
 end

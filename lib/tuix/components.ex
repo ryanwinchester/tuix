@@ -55,6 +55,15 @@ defmodule Tuix.Components do
     * `:selected_attrs` - attrs of the selected row (default `[:bold]`)
     * `:fg` / `:bg` / `:attrs` and the focus props above
 
+  ## ScrollBox props
+
+    * `:id` - required; also makes the scroll box focusable by default
+    * `:snap` - `:bottom` starts the box scrolled to the bottom and keeps it
+      pinned there while content grows (until the user scrolls up)
+    * all box props above (`:border`, `:padding`, `:title`, sizing, ...),
+      except `:flex_direction` - content always flows in a column
+    * the focus props above
+
   ## Text props
 
     * `:fg` / `:bg` - colors (see `Tuix.Color`)
@@ -106,6 +115,58 @@ defmodule Tuix.Components do
     quote do
       Tuix.Element.new(:box, unquote(props), List.wrap(unquote(children)))
     end
+  end
+
+  @doc """
+  Builds a scroll box: a focusable container whose children are laid out at
+  their full height and scrolled vertically within the box.
+
+  Scroll boxes require an `:id` and join the Tab focus order automatically
+  (`focusable: true`). While focused, `:up` / `:down` scroll by a row,
+  `:page_up` / `:page_down` by a viewport, and `:home` / `:end` jump to the
+  boundaries — clamped, with boundary presses consumed. The offset is
+  framework-managed (like an input's cursor): no event reaches the app and
+  there is nothing to assign back.
+
+      scroll_box id: :log, border: :single, height: 10 do
+        for line <- assigns.lines, do: text(line)
+      end
+
+  When the content overflows, a proportional scrollbar is drawn in the
+  rightmost column — over the border when the box has one, otherwise in a
+  reserved column. With `snap: :bottom` the box starts scrolled to the
+  bottom and stays pinned there as content grows (chat logs, tails);
+  scrolling up detaches, and returning to the bottom re-attaches.
+
+  Content always flows in a column, and `:flex_grow` on children has no
+  effect (the content area is as tall as the content). Accepts props and
+  children as a `do` block or a list, like `box/2`. See the module docs
+  above for the accepted props.
+  """
+  defmacro scroll_box(props, block_or_children \\ [])
+
+  defmacro scroll_box(props, do: block) do
+    children = unwrap_block(block)
+
+    quote do
+      Tuix.Components.build_scroll_box(unquote(props), [unquote_splicing(children)])
+    end
+  end
+
+  defmacro scroll_box(props, children) do
+    quote do
+      Tuix.Components.build_scroll_box(unquote(props), List.wrap(unquote(children)))
+    end
+  end
+
+  @doc false
+  @spec build_scroll_box(keyword(), list()) :: Element.t()
+  def build_scroll_box(props, children) when is_list(props) do
+    unless Keyword.has_key?(props, :id) do
+      raise ArgumentError, "scroll_box/2 requires an :id prop"
+    end
+
+    Element.new(:scroll_box, Keyword.put_new(props, :focusable, true), children)
   end
 
   @doc """

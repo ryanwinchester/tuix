@@ -1,6 +1,7 @@
 defmodule Tuix.Component do
   @moduledoc """
-  The behaviour for focusable, stateful element kinds (`input`, `select`).
+  The behaviour for focusable, stateful element kinds (`input`, `select`,
+  `scroll_box`).
 
   When a key reaches a focused component element, the runtime looks up the
   module for its tag and calls `c:on_key/3` with the element's props (from

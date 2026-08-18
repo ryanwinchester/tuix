@@ -42,8 +42,7 @@ defmodule Chat do
         bot_name: Enum.random(@bot_names),
         messages: [],
         draft: "",
-        bot_typing: false,
-        height: 24
+        bot_typing: false
       )
 
     {:ok, app}
@@ -94,10 +93,6 @@ defmodule Chat do
     end
   end
 
-  def handle_event(%Event.Resize{height: height}, app) do
-    {:noreply, assign(app, height: height)}
-  end
-
   def handle_event(%Event.Key{key: :escape}, app), do: {:stop, :normal, app}
   def handle_event(_event, app), do: {:noreply, app}
 
@@ -139,8 +134,16 @@ defmodule Chat do
   defp chat_screen(assigns) do
     box padding: 1, gap: 1, flex_direction: :column, width: "100%", height: "100%" do
       box flex_direction: :row, gap: 1, flex_grow: 1 do
-        box border: :rounded, title: "Chat", padding: 1, flex_grow: 1 do
-          for message <- visible_messages(assigns) do
+        # The history sticks to the newest message (snap: :bottom); Tab into
+        # it and scroll up to read back.
+        scroll_box id: :history,
+                   snap: :bottom,
+                   border: :rounded,
+                   title: "Chat",
+                   padding: 1,
+                   flex_grow: 1,
+                   focus_border_color: :cyan do
+          for message <- assigns.messages do
             bubble(message, assigns)
           end
 
@@ -156,7 +159,7 @@ defmodule Chat do
         input id: :draft, value: assigns.draft, placeholder: "Say something..."
       end
 
-      text "Enter to send, Esc to quit", fg: :bright_black
+      text "Enter to send, Tab to focus the chat log, Esc to quit", fg: :bright_black
     end
   end
 
@@ -176,14 +179,6 @@ defmodule Chat do
 
   defp bubble({:you, message}, assigns), do: text("#{assigns.username}: #{message}", fg: :cyan)
   defp bubble({:bot, message}, assigns), do: text("#{assigns.bot_name}: #{message}", fg: :green)
-
-  # No ScrollBox yet, so keep only the messages that fit in the history pane.
-  # Chrome outside the history: outer padding (2), gaps (2), input box (3),
-  # help line (1), history border + padding (4).
-  defp visible_messages(assigns) do
-    max_visible = max(assigns.height - 12 - if(assigns.bot_typing, do: 1, else: 0), 1)
-    Enum.take(assigns.messages, -max_visible)
-  end
 end
 
 Tuix.run(Chat)

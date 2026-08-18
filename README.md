@@ -53,6 +53,7 @@ Try it: `mix run examples/counter.exs`
   - [Focus](#focus)
   - [Inputs](#inputs)
   - [Selects](#selects)
+  - [Scroll boxes](#scroll-boxes)
   - [Testing](#testing)
 - [Design notes and known trade-offs](#design-notes-and-known-trade-offs)
 - [Roadmap](#roadmap)
@@ -75,6 +76,9 @@ Try it: `mix run examples/counter.exs`
 - **Select** - a controlled list picker: arrow keys move the selection,
   changes arrive as events, and long lists scroll to keep the selection
   visible.
+- **Scroll box** - a focusable scrolling container with a proportional
+  scrollbar; arrows and PgUp/PgDn/Home/End scroll, and `snap: :bottom`
+  keeps logs pinned to the newest entry.
 - **Flexbox-subset layout** - `flex_direction`, `flex_grow`, `gap`,
   `padding`, borders, fixed and percentage sizes.
 - **Diffed rendering** - frames are cell buffers; unchanged rows are skipped
@@ -246,6 +250,33 @@ select scroll to keep the selection visible.
 
 Try it: `mix run examples/select.exs`
 
+### Scroll boxes
+
+`scroll_box/2` builds a focusable container whose children are laid out at
+their full height and scrolled vertically within the box. It is built on
+the focus model: Tab into it (or `autofocus` it) and `:up` / `:down`
+scroll by a row, `:page_up` / `:page_down` by a viewport, and `:home` /
+`:end` jump to the boundaries. The offset is framework-managed - like an
+input's cursor, no event reaches the app and there is nothing to assign
+back. When the content overflows, a proportional scrollbar is drawn in the
+rightmost column (over the border, when the box has one):
+
+```elixir
+def render(assigns) do
+  scroll_box id: :log, border: :single, title: "Log",
+             height: 10, focus_border_color: :cyan do
+    for line <- assigns.lines, do: text(line)
+  end
+end
+```
+
+With `snap: :bottom` the box starts scrolled to the bottom and stays
+pinned there as content grows - chat histories, log tails. Scrolling up
+detaches; scrolling back to the bottom (or pressing `:end`) re-attaches.
+
+Try it: `mix run examples/scroll_box.exs` (and the chat history pane in
+`mix run examples/chat.exs`)
+
 ### Testing
 
 ```elixir
@@ -277,12 +308,12 @@ individual cells and their styles.
 
 ## Roadmap
 
-- ScrollBox component (built on the focus model), including scrollbar
-  rendering
 - Mouse support
 - `justify_content` / `align_items` / wrapping in the layout engine
 - Select enhancements: multi-select, typeahead/filtering, wrap-around
   navigation, `PageUp` / `PageDown`
+- ScrollBox enhancements: scroll-into-view for focused descendants,
+  horizontal scrolling, mouse-wheel scrolling (needs mouse support)
 - Dropdown/overlay presentation for selects (needs z-order/overlay
   machinery)
 - Input enhancements: readline-style ctrl bindings, `max_length`, real

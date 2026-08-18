@@ -31,8 +31,9 @@ defmodule Tuix.TestRenderer do
   The `:focus` option marks the element with that id as focused (applying
   focus styles), like the runtime does for the focused element; `:cursor`
   places a focused input's cursor at that grapheme offset (default: end of
-  value). All other options are passed to the app's `mount/2` (module apps
-  only).
+  value); `:scroll_offset` scrolls a focused scroll box to that row (or
+  `:bottom`). All other options are passed to the app's `mount/2` (module
+  apps only).
   """
   @spec render(Element.t() | module(), pos_integer(), pos_integer(), keyword()) :: Buffer.t()
   def render(element_or_module, width, height, opts \\ [])
@@ -44,7 +45,7 @@ defmodule Tuix.TestRenderer do
   end
 
   def render(module, width, height, opts) when is_atom(module) do
-    {mark_opts, opts} = Keyword.split(opts, [:focus, :cursor])
+    {mark_opts, opts} = Keyword.split(opts, [:focus, :cursor, :scroll_offset])
     app = %App{module: module}
 
     app =
@@ -64,7 +65,7 @@ defmodule Tuix.TestRenderer do
   defp mark(element, opts) do
     case Keyword.get(opts, :focus) do
       nil -> element
-      id -> Focus.mark(element, id, opts |> Keyword.take([:cursor]) |> Map.new())
+      id -> Focus.mark(element, id, opts |> Keyword.take([:cursor, :scroll_offset]) |> Map.new())
     end
   end
 

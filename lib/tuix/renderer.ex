@@ -8,6 +8,7 @@ defmodule Tuix.Renderer do
   alias Tuix.Cell
   alias Tuix.Color
   alias Tuix.Components.Input, as: TextInput
+  alias Tuix.Components.ScrollBox
   alias Tuix.Components.Select, as: ListSelect
   alias Tuix.Element
   alias Tuix.Layout.Placed
@@ -47,6 +48,25 @@ defmodule Tuix.Renderer do
     |> paint_background(element, rect, clip)
     |> paint_border(element, rect, clip)
     |> paint_children(placed.children, clip)
+  end
+
+  defp do_paint(
+         %Placed{element: %Element{tag: :scroll_box} = element, rect: rect} = placed,
+         buffer,
+         clip
+       ) do
+    clip = intersect(clip, rect)
+    props = element.props
+
+    {_vx, vy, _vw, vh} = viewport = ScrollBox.viewport(props, rect)
+    content_h = ScrollBox.content_height(placed.children, vy)
+    offset = ScrollBox.resolve_offset(props, content_h, vh)
+
+    buffer
+    |> paint_background(element, rect, clip)
+    |> paint_border(element, rect, clip)
+    |> paint_children(scroll(placed.children, offset), intersect(clip, viewport))
+    |> paint_scrollbar(element, rect, vh, content_h, offset, clip)
   end
 
   defp do_paint(%Placed{element: %Element{tag: :text} = element, rect: rect}, buffer, clip) do
@@ -172,6 +192,57 @@ defmodule Tuix.Renderer do
 
   defp paint_children(buffer, children, clip) do
     Enum.reduce(children, buffer, &do_paint(&1, &2, clip))
+  end
+
+  # Shifts a scroll box's children up by the scroll offset; the viewport
+  # clip drops whatever falls outside.
+  defp scroll(children, 0), do: children
+  defp scroll(children, offset), do: Enum.map(children, &translate(&1, -offset))
+
+  defp translate(%Placed{rect: {x, y, w, h}, children: children} = placed, dy) do
+    %{placed | rect: {x, y + dy, w, h}, children: Enum.map(children, &translate(&1, dy))}
+  end
+
+  @scrollbar_track "│"
+  @scrollbar_thumb "█"
+
+  # Paints the scrollbar in the rect's rightmost column when the content
+  # overflows: over the border when the box has one (the border verticals
+  # already form the track), otherwise as a track + thumb.
+  defp paint_scrollbar(buffer, _element, _rect, viewport_h, content_h, _offset, _clip)
+       when content_h <= viewport_h,
+       do: buffer
+
+  defp paint_scrollbar(
+         buffer,
+         %Element{props: props},
+         {x, y, w, h},
+         viewport_h,
+         content_h,
+         offset,
+         clip
+       ) do
+    bar_x = x + w - 1
+    bordered? = border_style(props) != nil
+    {track_y, track_h} = if bordered?, do: {y + 1, max(h - 2, 0)}, else: {y, h}
+
+    {thumb_row, thumb_h} = ScrollBox.thumb(offset, content_h, viewport_h, track_h)
+    style = [fg: border_color(props), bg: background(props)]
+
+    buffer =
+      if bordered? do
+        buffer
+      else
+        Enum.reduce(track_y..(track_y + track_h - 1)//1, buffer, fn row, buf ->
+          Buffer.put_text(buf, bar_x, row, @scrollbar_track, style, clip)
+        end)
+      end
+
+    thumb_y = track_y + thumb_row
+
+    Enum.reduce(thumb_y..(thumb_y + thumb_h - 1)//1, buffer, fn row, buf ->
+      Buffer.put_text(buf, bar_x, row, @scrollbar_thumb, style, clip)
+    end)
   end
 
   defp paint_background(buffer, %Element{props: props}, rect, clip) do

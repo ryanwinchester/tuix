@@ -9,6 +9,9 @@ defmodule Tuix.Layout do
   border insets, fixed and percentage sizes, `:flex_grow`, and cross-axis
   stretch (the default for boxes without an explicit cross size).
 
+  Scroll boxes (`:scroll_box`) lay their children out in a column at full
+  content height; the renderer scrolls and clips them to the viewport.
+
   Not yet supported: wrapping, `justify_content` / `align_items` variants.
   """
 
@@ -53,6 +56,26 @@ defmodule Tuix.Layout do
 
     direction = direction(element)
     children = flex(element.children, content, direction, gap(element))
+
+    %Placed{element: element, rect: rect, children: children}
+  end
+
+  # Scroll boxes lay their children out in a column at full content height
+  # (nothing is clamped to the visible viewport); the renderer shifts the
+  # children by the scroll offset and clips them to the viewport.
+  defp place(%Element{tag: :scroll_box} = element, {x, y, w, h} = rect) do
+    inset = border_inset(element) + padding(element)
+    {cx, cy, cw, ch} = {x + inset, y + inset, max(w - 2 * inset, 0), max(h - 2 * inset, 0)}
+
+    gap = gap(element)
+    content_h = content_height(element.children, cw, gap)
+
+    # Without a border or padding, the rect's rightmost column is reserved
+    # for the scrollbar when the content overflows (bordered or padded
+    # scroll boxes draw the scrollbar over that column anyway).
+    cw = if inset == 0 and content_h > ch, do: max(cw - 1, 0), else: cw
+
+    children = flex(element.children, {cx, cy, cw, content_h}, :column, gap)
 
     %Placed{element: element, rect: rect, children: children}
   end
@@ -166,7 +189,8 @@ defmodule Tuix.Layout do
   defp intrinsic(%Element{tag: :select, props: props}, :height, _cross),
     do: props |> Select.options() |> length()
 
-  defp intrinsic(%Element{tag: :box} = element, dimension, cross) do
+  defp intrinsic(%Element{tag: tag} = element, dimension, cross)
+       when tag in [:box, :scroll_box] do
     inset = 2 * (border_inset(element) + padding(element))
     direction = direction(element)
     children = element.children
@@ -214,6 +238,20 @@ defmodule Tuix.Layout do
 
   defp clamp(size, max_size), do: size |> min(max_size) |> max(0)
 
+  # The full height of a scroll box's content: its children stacked in a
+  # column, unbounded by the visible viewport.
+  defp content_height([], _cross, _gap), do: 0
+
+  defp content_height(children, cross, gap) do
+    heights =
+      Enum.map(children, fn child ->
+        resolve_size(child, :height, 0) || intrinsic(child, :height, cross)
+      end)
+
+    Enum.sum(heights) + gap * (length(children) - 1)
+  end
+
+  defp direction(%Element{tag: :scroll_box}), do: :column
   defp direction(%Element{props: props}), do: Map.get(props, :flex_direction, :column)
   defp gap(%Element{props: props}), do: Map.get(props, :gap, 0)
   defp padding(%Element{props: props}), do: Map.get(props, :padding, 0)

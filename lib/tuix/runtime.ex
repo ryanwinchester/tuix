@@ -15,9 +15,13 @@ defmodule Tuix.Runtime do
   use GenServer, restart: :temporary
 
   alias Tuix.App
+  alias Tuix.Buffer
+  alias Tuix.Components.ScrollBox
   alias Tuix.Element
   alias Tuix.Event
   alias Tuix.Focus
+  alias Tuix.Layout
+  alias Tuix.Layout.Placed
   alias Tuix.Renderer
   alias Tuix.Terminal
 
@@ -26,7 +30,8 @@ defmodule Tuix.Runtime do
   # Tag -> Tuix.Component module for focusable, stateful element kinds.
   @components %{
     input: Tuix.Components.Input,
-    select: Tuix.Components.Select
+    select: Tuix.Components.Select,
+    scroll_box: Tuix.Components.ScrollBox
   }
 
   def start_link(opts) do
@@ -287,14 +292,71 @@ defmodule Tuix.Runtime do
 
     focused = App.focused(app)
 
-    buffer =
+    placed =
       tree
+      |> mark_scroll_offsets(app)
       |> Focus.mark(focused, mark_props(app, tree, focused))
-      |> Renderer.render(width, height)
+      |> Layout.compute(width, height)
 
+    app = sync_scroll_state(app, placed)
+
+    buffer = Renderer.paint(placed, Buffer.new(width, height))
     Terminal.write(Renderer.to_iodata(buffer, state.prev_buffer))
 
     %{state | app: app, tree: tree, focus_order: order, autofocused: true, prev_buffer: buffer}
+  end
+
+  # Scroll boxes keep their scroll position while unfocused, so every
+  # scroll box with stored state gets its offset injected before layout
+  # (`Focus.mark/3` only decorates the focused element).
+  defp mark_scroll_offsets(%Element{} = element, app) do
+    element = %{element | children: Enum.map(element.children, &mark_scroll_offsets(&1, app))}
+
+    with :scroll_box <- element.tag,
+         %{id: id} <- element.props,
+         state when state != nil <- component_state(app, id) do
+      %{element | props: Map.merge(element.props, ScrollBox.mark_props(element.props, state))}
+    else
+      _ -> element
+    end
+  end
+
+  # After layout, refreshes each scroll box's framework state with the
+  # measured viewport height and scrollable range — and the offset those
+  # imply (clamped, or pinned to the bottom for `snap: :bottom` boxes) —
+  # so `on_key/3` can page and clamp without recomputing layout.
+  defp sync_scroll_state(app, %Placed{} = placed) do
+    placed
+    |> collect_scroll_state([])
+    |> Enum.reduce(app, fn {id, scroll_state}, app ->
+      if component_state(app, id) == scroll_state do
+        app
+      else
+        put_component_state(app, id, scroll_state)
+      end
+    end)
+  end
+
+  defp collect_scroll_state(%Placed{element: element, children: children} = placed, acc) do
+    acc =
+      case element do
+        %Element{tag: :scroll_box, props: %{id: id} = props} ->
+          {_vx, vy, _vw, vh} = ScrollBox.viewport(props, placed.rect)
+          content_h = ScrollBox.content_height(children, vy)
+
+          scroll_state = %{
+            offset: ScrollBox.resolve_offset(props, content_h, vh),
+            viewport: vh,
+            max_offset: ScrollBox.max_offset(content_h, vh)
+          }
+
+          [{id, scroll_state} | acc]
+
+        _other ->
+          acc
+      end
+
+    Enum.reduce(children, acc, &collect_scroll_state/2)
   end
 
   # Extra props injected into the focused element before painting (e.g. a

@@ -354,6 +354,134 @@ defmodule Tuix.RendererTest do
     end
   end
 
+  describe "scroll box painting" do
+    defp log(props \\ []) do
+      scroll_box [id: :log, border: :single, width: 8, height: 4] ++ props do
+        text("one")
+        text("two")
+        text("three")
+        text("four")
+        text("five")
+        text("six")
+      end
+    end
+
+    test "children scrolled by the offset and clipped to the viewport" do
+      assert TestRenderer.render_to_text(log(scroll_offset: 2), 8, 4) ==
+               """
+               ┌──────┐
+               │three │
+               │four  █
+               └──────┘
+               """
+               |> String.trim_trailing()
+    end
+
+    test "unscrolled box shows the top with the thumb at the top" do
+      assert TestRenderer.render_to_text(log(), 8, 4) ==
+               """
+               ┌──────┐
+               │one   █
+               │two   │
+               └──────┘
+               """
+               |> String.trim_trailing()
+    end
+
+    test "offsets are clamped to the scrollable range" do
+      assert TestRenderer.render_to_text(log(scroll_offset: 99), 8, 4) ==
+               """
+               ┌──────┐
+               │five  │
+               │six   █
+               └──────┘
+               """
+               |> String.trim_trailing()
+    end
+
+    test "snap: :bottom starts scrolled to the bottom" do
+      assert TestRenderer.render_to_text(log(snap: :bottom), 8, 4) ==
+               """
+               ┌──────┐
+               │five  │
+               │six   █
+               └──────┘
+               """
+               |> String.trim_trailing()
+    end
+
+    test "no scrollbar when the content fits" do
+      element =
+        scroll_box id: :log, border: :single, width: 8, height: 4 do
+          text("one")
+          text("two")
+        end
+
+      assert TestRenderer.render_to_text(element, 8, 4) ==
+               """
+               ┌──────┐
+               │one   │
+               │two   │
+               └──────┘
+               """
+               |> String.trim_trailing()
+    end
+
+    test "borderless overflow reserves the rightmost column for the scrollbar" do
+      element =
+        scroll_box id: :log, width: 4, height: 2 do
+          text("aaaa")
+          text("bbbb")
+          text("cccc")
+        end
+
+      assert TestRenderer.render_to_text(element, 4, 2) ==
+               """
+               aaa█
+               bbb│
+               """
+               |> String.trim_trailing()
+    end
+
+    test "focused scroll box applies focus styles and the marked offset" do
+      element = log(focus_border_color: :cyan)
+      buffer = TestRenderer.render(element, 8, 4, focus: :log, scroll_offset: 2)
+
+      assert %Cell{char: "┌", fg: :cyan} = Buffer.at(buffer, 0, 0)
+      assert %Cell{char: "█", fg: :cyan} = Buffer.at(buffer, 7, 2)
+      assert Buffer.to_text(buffer) =~ "three"
+    end
+
+    test "nested children translate with the scroll" do
+      element =
+        scroll_box id: :log, width: 7, height: 3, scroll_offset: 3 do
+          box border: :single, height: 3 do
+            text("one")
+          end
+
+          box border: :single, height: 3 do
+            text("two")
+          end
+        end
+
+      assert TestRenderer.render_to_text(element, 7, 3) ==
+               """
+               ┌────┐│
+               │two ││
+               └────┘█
+               """
+               |> String.trim_trailing()
+    end
+
+    test "scroll box is focusable by default and requires an id" do
+      assert Tuix.Focus.order(box(do: log())) == [:log]
+
+      assert_raise ArgumentError, ~r/requires an :id prop/, fn ->
+        scroll_box(title: "nope")
+      end
+    end
+  end
+
   describe "frame diffing" do
     test "identical frames produce only a style reset" do
       buffer = TestRenderer.render(text("same"), 10, 1)
