@@ -1,7 +1,9 @@
 defmodule Tuix.Runtime do
   @moduledoc """
   The event loop: holds the `Tuix.App` state, dispatches input and resize
-  events to the app's callbacks, and re-renders after every state change.
+  events to the app's callbacks, manages keyboard focus (Tab / Shift+Tab
+  traversal over `focusable` elements), routes keys to the focused input
+  element, and re-renders after every state change.
 
   Rendering is event-driven — nothing is written to the terminal unless
   state may have changed, and only changed cells are written.
@@ -12,7 +14,10 @@ defmodule Tuix.Runtime do
   use GenServer, restart: :temporary
 
   alias Tuix.App
+  alias Tuix.Components.Input, as: TextInput
+  alias Tuix.Element
   alias Tuix.Event
+  alias Tuix.Focus
   alias Tuix.Renderer
   alias Tuix.Terminal
 
@@ -37,7 +42,10 @@ defmodule Tuix.Runtime do
       size: {width, height},
       prev_buffer: nil,
       exit_on_ctrl_c: exit_on_ctrl_c,
-      resize: subscribe_resize()
+      resize: subscribe_resize(),
+      tree: nil,
+      focus_order: [],
+      autofocused: false
     }
 
     {:ok, _reader} = Tuix.Input.start_link(self())
@@ -54,8 +62,36 @@ defmodule Tuix.Runtime do
     {:stop, :normal, state}
   end
 
+  # Tab / Shift+Tab move focus through the focus order collected from the
+  # last rendered tree. Consumed only when something is focusable; otherwise
+  # they fall through to the app's handle_event/2.
+  def handle_info(
+        {:tuix_input, %Event.Key{key: key}},
+        %{focus_order: [_ | _] = order} = state
+      )
+      when key in [:tab, :backtab] do
+    current = App.focused(state.app)
+    to = if key == :tab, do: Focus.next(order, current), else: Focus.prev(order, current)
+    app = App.focus(state.app, to)
+
+    # dispatch/2 detects the focus change and delivers the Focus event.
+    dispatch(state, fn -> {:noreply, app} end)
+  end
+
+  # Keys are offered to the focused input first (insert, delete, cursor
+  # movement); keys the input does not handle — and all keys when nothing
+  # focused is an input — fall through to the app with `target` set.
   def handle_info({:tuix_input, event}, state) do
-    dispatch(state, fn -> state.module.handle_event(event, state.app) end)
+    focused = App.focused(state.app)
+
+    case route_to_input(state, event, focused) do
+      :fallthrough ->
+        event = stamp_target(event, focused)
+        dispatch(state, fn -> state.module.handle_event(event, state.app) end)
+
+      reply ->
+        reply
+    end
   end
 
   def handle_info(:tuix_check_resize, state) do
@@ -111,7 +147,7 @@ defmodule Tuix.Runtime do
   end
 
   defp dispatch(state, fun) do
-    case fun.() do
+    case run_callback(state, fun) do
       {:noreply, %App{} = app} ->
         {:noreply, maybe_render(state, app)}
 
@@ -120,11 +156,107 @@ defmodule Tuix.Runtime do
     end
   end
 
-  # render/1 is pure over assigns, so unchanged assigns mean an unchanged
-  # frame — unless a resize invalidated the previous buffer.
+  # Runs the callback and, when it changed focus (Tab traversal or a
+  # programmatic focus/2 / blur/1), delivers Focus events until focus
+  # settles. The final app is rendered once by dispatch/2.
+  defp run_callback(state, fun) do
+    from = App.focused(state.app)
+
+    case fun.() do
+      {:noreply, %App{} = app} -> notify_focus(state.module, app, from)
+      {:stop, _reason, %App{}} = stop -> stop
+    end
+  end
+
+  defp notify_focus(module, app, from) do
+    case App.focused(app) do
+      ^from ->
+        {:noreply, app}
+
+      to ->
+        case module.handle_event(%Event.Focus{id: to, from: from}, app) do
+          {:noreply, %App{} = app} -> notify_focus(module, app, to)
+          {:stop, _reason, %App{}} = stop -> stop
+        end
+    end
+  end
+
+  defp stamp_target(%Event.Key{} = event, target), do: %{event | target: target}
+  defp stamp_target(event, _target), do: event
+
+  ## Input routing
+
+  defp route_to_input(state, %Event.Key{} = event, focused) do
+    case focused_input(state.tree, focused) do
+      nil ->
+        :fallthrough
+
+      %Element{props: props} ->
+        value = Map.get(props, :value, "")
+        cursor = cursor(state.app, focused, value)
+
+        case TextInput.edit(value, cursor, event) do
+          {:changed, new_value, new_cursor} ->
+            # The app owns the value: report it and let the app assign it.
+            app = put_cursor(state.app, focused, new_cursor)
+            input_event = %Event.Input{id: focused, value: new_value}
+            dispatch(state, fn -> state.module.handle_event(input_event, app) end)
+
+          {:moved, new_cursor} ->
+            dispatch(state, fn -> {:noreply, put_cursor(state.app, focused, new_cursor)} end)
+
+          :ignored ->
+            :fallthrough
+        end
+    end
+  end
+
+  defp route_to_input(_state, _event, _focused), do: :fallthrough
+
+  defp focused_input(%Element{} = tree, focused) do
+    case Focus.find(tree, focused) do
+      %Element{tag: :input} = element -> element
+      _other -> nil
+    end
+  end
+
+  defp focused_input(_tree, _focused), do: nil
+
+  # The cursor for an input: stored offset clamped to the value (the app
+  # may have shortened it), defaulting to the end of the value.
+  defp cursor(app, id, value) do
+    case app.private |> Map.get(:input_cursors, %{}) |> Map.fetch(id) do
+      {:ok, cursor} -> min(cursor, String.length(value))
+      :error -> String.length(value)
+    end
+  end
+
+  defp put_cursor(app, id, cursor) do
+    cursors = app.private |> Map.get(:input_cursors, %{}) |> Map.put(id, cursor)
+    %{app | private: Map.put(app.private, :input_cursors, cursors)}
+  end
+
+  # Drops cursor state for inputs that left the tree.
+  defp prune_cursors(app, order) do
+    case Map.get(app.private, :input_cursors) do
+      nil ->
+        app
+
+      cursors ->
+        case Map.take(cursors, order) do
+          ^cursors -> app
+          pruned when pruned == %{} -> %{app | private: Map.delete(app.private, :input_cursors)}
+          pruned -> %{app | private: Map.put(app.private, :input_cursors, pruned)}
+        end
+    end
+  end
+
+  # render/1 is pure over assigns, so unchanged assigns (and unchanged
+  # framework state such as focus) mean an unchanged frame — unless a
+  # resize invalidated the previous buffer.
   defp maybe_render(
-         %{app: %{assigns: assigns}, prev_buffer: prev} = state,
-         %{assigns: assigns} = app
+         %{app: %{assigns: assigns, private: private}, prev_buffer: prev} = state,
+         %{assigns: assigns, private: private} = app
        )
        when prev != nil do
     %{state | app: app}
@@ -137,14 +269,46 @@ defmodule Tuix.Runtime do
   defp render_frame(state) do
     {width, height} = state.size
 
+    tree = state.module.render(state.app.assigns)
+    order = Focus.order(tree)
+
+    app =
+      state.app
+      |> reconcile_focus(tree, order, state)
+      |> prune_cursors(order)
+
+    focused = App.focused(app)
+
     buffer =
-      state.app.assigns
-      |> state.module.render()
+      tree
+      |> Focus.mark(focused, mark_props(app, tree, focused))
       |> Renderer.render(width, height)
 
     Terminal.write(Renderer.to_iodata(buffer, state.prev_buffer))
 
-    %{state | prev_buffer: buffer}
+    %{state | app: app, tree: tree, focus_order: order, autofocused: true, prev_buffer: buffer}
+  end
+
+  # Extra props injected into the focused element before painting: focused
+  # inputs get their cursor offset.
+  defp mark_props(app, tree, focused) do
+    case focused_input(tree, focused) do
+      nil -> %{}
+      %Element{props: props} -> %{cursor: cursor(app, focused, Map.get(props, :value, ""))}
+    end
+  end
+
+  # Clears focus when the focused element left the tree, and applies
+  # `autofocus: true` on the first frame when nothing is focused. Both are
+  # silent (no Focus event).
+  defp reconcile_focus(app, tree, order, state) do
+    case App.focused(app) do
+      nil ->
+        if state.autofocused, do: app, else: App.focus(app, Focus.autofocus(tree))
+
+      focused ->
+        if focused in order, do: app, else: App.blur(app)
+    end
   end
 
   defp call_mount(module, opts) do

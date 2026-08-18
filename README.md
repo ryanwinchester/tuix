@@ -48,6 +48,11 @@ Try it: `mix run examples/counter.exs`
   PubSub broadcasts) can drive the UI through `handle_info/2`.
 - **Declarative components** - `box` and `text` are plain data constructors;
   conditionals and comprehensions compose naturally inside `do` blocks.
+- **Keyboard focus** - mark boxes `focusable` and Tab / Shift+Tab traversal,
+  focus styling, and per-element event targeting come for free.
+- **Text input** - a controlled, grapheme-aware single-line input with
+  cursor, placeholder, masking, and horizontal scrolling; edits arrive as
+  events and the app owns the value.
 - **Flexbox-subset layout** - `flex_direction`, `flex_grow`, `gap`,
   `padding`, borders, fixed and percentage sizes.
 - **Diffed rendering** - frames are cell buffers; unchanged rows are skipped
@@ -127,6 +132,67 @@ Keyboard input arrives as `%Tuix.Event.Key{}` with a `key` (a grapheme like
 `shift` modifier flags. Terminal resizes arrive as `%Tuix.Event.Resize{}`
 and automatically reflow the layout.
 
+### Focus
+
+Boxes with `focusable: true` and a stable `:id` join the focus ring. The
+runtime cycles focus with Tab / Shift+Tab (in document order, wrapping),
+applies `focus_border_color` / `focus_bg` to the focused element, and stamps
+every key event with the focused id as `target`:
+
+```elixir
+def render(assigns) do
+  box flex_direction: :row, gap: 1 do
+    box id: :left, focusable: true, autofocus: true,
+        border: :single, focus_border_color: :cyan do
+      text("left pane")
+    end
+
+    box id: :right, focusable: true, border: :single, focus_border_color: :cyan do
+      text("right pane")
+    end
+  end
+end
+
+def handle_event(%Tuix.Event.Key{key: :up, target: :left}, app), do: ...
+```
+
+Focus can also be controlled programmatically with `focus/2` and `blur/1`
+(and read with `focused/1`). Every focus change — traversal or programmatic —
+is delivered to the app as a `%Tuix.Event.Focus{id: new, from: old}` event.
+If the focused element disappears from the tree, focus is cleared.
+
+Try it: `mix run examples/focus.exs`
+
+### Inputs
+
+`input/1` builds a single-line text input. Inputs are focusable by default
+and controlled: the app owns the value, and edits arrive as
+`%Tuix.Event.Input{}` events that the app assigns back (LiveView form
+style) — or transforms, e.g. to enforce a format:
+
+```elixir
+def render(assigns) do
+  box border: :single, title: "Email" do
+    input(id: :email, value: assigns.email, placeholder: "you@example.com")
+  end
+end
+
+def handle_event(%Tuix.Event.Input{id: :email, value: value}, app),
+  do: {:noreply, assign(app, email: value)}
+
+def handle_event(%Tuix.Event.Key{key: :enter, target: :email}, app),
+  do: submit(app)
+```
+
+While an input is focused it consumes printable keys, `:backspace`,
+`:delete`, and `:left` / `:right` / `:home` / `:end` (grapheme-aware, with
+the cursor managed by the runtime). Everything else — `:enter`, `:escape`,
+ctrl combos, Tab traversal — falls through to the app with `target` set.
+`mask: "•"` renders password fields; long values scroll horizontally to
+keep the cursor visible.
+
+Try it: `mix run examples/login.exs`
+
 ### Testing
 
 ```elixir
@@ -154,11 +220,11 @@ individual cells and their styles.
 - **Wide-character edge case:** a continuation cell changing without its
   head cell is not repainted. This only occurs when new content partially
   overlaps a wide grapheme.
-- **No mouse, focus, or input components yet** - see the roadmap.
+- **No mouse support yet** - see the roadmap.
 
 ## Roadmap
 
-- Input, Select, and ScrollBox components with focus management
+- Select and ScrollBox components (built on the focus model)
 - Mouse support
 - `justify_content` / `align_items` / wrapping in the layout engine
 - Kitty keyboard protocol

@@ -94,6 +94,123 @@ defmodule Tuix.RendererTest do
     end
   end
 
+  describe "focus styles" do
+    test "focus_border_color applies when focused via the :focus option" do
+      element =
+        box(id: :pane, focusable: true, border: :single, focus_border_color: :cyan, width: 4)
+
+      focused = TestRenderer.render(element, 4, 3, focus: :pane)
+      assert %Cell{char: "┌", fg: :cyan} = Buffer.at(focused, 0, 0)
+
+      unfocused = TestRenderer.render(element, 4, 3)
+      assert %Cell{char: "┌", fg: nil} = Buffer.at(unfocused, 0, 0)
+    end
+
+    test "focus_border_color overrides border_color" do
+      element =
+        box(
+          id: :pane,
+          focusable: true,
+          border: :single,
+          border_color: :red,
+          focus_border_color: :cyan,
+          width: 4
+        )
+
+      focused = TestRenderer.render(element, 4, 3, focus: :pane)
+      assert %Cell{fg: :cyan} = Buffer.at(focused, 0, 0)
+
+      unfocused = TestRenderer.render(element, 4, 3)
+      assert %Cell{fg: :red} = Buffer.at(unfocused, 0, 0)
+    end
+
+    test "focus_bg overrides bg when focused" do
+      element = box(id: :pane, focusable: true, bg: :blue, focus_bg: :green, width: 2, height: 1)
+
+      focused = TestRenderer.render(element, 2, 1, focus: :pane)
+      assert %Cell{char: " ", bg: :green} = Buffer.at(focused, 0, 0)
+
+      unfocused = TestRenderer.render(element, 2, 1)
+      assert %Cell{char: " ", bg: :blue} = Buffer.at(unfocused, 0, 0)
+    end
+
+    test "focus styles only apply to the focused element" do
+      element =
+        box flex_direction: :row do
+          box(id: :a, focusable: true, border: :single, focus_border_color: :cyan, width: 3)
+          box(id: :b, focusable: true, border: :single, focus_border_color: :cyan, width: 3)
+        end
+
+      buffer = TestRenderer.render(element, 6, 3, focus: :b)
+      assert %Cell{fg: nil} = Buffer.at(buffer, 0, 0)
+      assert %Cell{fg: :cyan} = Buffer.at(buffer, 3, 0)
+    end
+  end
+
+  describe "input painting" do
+    test "shows the placeholder when empty and unfocused" do
+      element = input(id: :name, placeholder: "Your name")
+      buffer = TestRenderer.render(element, 12, 1)
+
+      assert Buffer.to_text(buffer) == "Your name"
+      assert %Cell{char: "Y", fg: :bright_black} = Buffer.at(buffer, 0, 0)
+    end
+
+    test "shows the value when unfocused, without a cursor" do
+      buffer = TestRenderer.render(input(id: :name, value: "hi"), 6, 1)
+
+      assert Buffer.to_text(buffer) == "hi"
+      assert %Cell{attrs: []} = Buffer.at(buffer, 0, 0)
+      assert %Cell{attrs: []} = Buffer.at(buffer, 1, 0)
+    end
+
+    test "focused input draws a reverse-video cursor at the offset" do
+      element = input(id: :name, value: "abc")
+      buffer = TestRenderer.render(element, 6, 1, focus: :name, cursor: 1)
+
+      assert %Cell{char: "a", attrs: []} = Buffer.at(buffer, 0, 0)
+      assert %Cell{char: "b", attrs: [:reverse]} = Buffer.at(buffer, 1, 0)
+      assert %Cell{char: "c", attrs: []} = Buffer.at(buffer, 2, 0)
+    end
+
+    test "cursor defaults to the end of the value" do
+      buffer = TestRenderer.render(input(id: :name, value: "ab"), 6, 1, focus: :name)
+
+      assert %Cell{char: " ", attrs: [:reverse]} = Buffer.at(buffer, 2, 0)
+    end
+
+    test "focused empty input shows the cursor, not the placeholder" do
+      element = input(id: :name, placeholder: "Your name")
+      buffer = TestRenderer.render(element, 12, 1, focus: :name)
+
+      assert %Cell{char: " ", attrs: [:reverse]} = Buffer.at(buffer, 0, 0)
+      assert Buffer.to_text(buffer) == ""
+    end
+
+    test "scrolls horizontally to keep the cursor visible" do
+      element = input(id: :name, value: "abcdef", width: 3)
+      buffer = TestRenderer.render(element, 3, 1, focus: :name, cursor: 6)
+
+      assert Buffer.to_text(buffer) == "ef"
+      assert %Cell{char: " ", attrs: [:reverse]} = Buffer.at(buffer, 2, 0)
+    end
+
+    test "mask hides the value" do
+      element = input(id: :password, value: "secret", mask: "•")
+      buffer = TestRenderer.render(element, 8, 1)
+
+      assert Buffer.to_text(buffer) == "••••••"
+    end
+
+    test "input is focusable by default and requires an id" do
+      assert Tuix.Focus.order(box(do: input(id: :a))) == [:a]
+
+      assert_raise ArgumentError, ~r/requires an :id prop/, fn ->
+        input(placeholder: "nope")
+      end
+    end
+  end
+
   describe "frame diffing" do
     test "identical frames produce only a style reset" do
       buffer = TestRenderer.render(text("same"), 10, 1)

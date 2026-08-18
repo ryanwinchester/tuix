@@ -7,6 +7,7 @@ defmodule Tuix.Renderer do
   alias Tuix.Buffer
   alias Tuix.Cell
   alias Tuix.Color
+  alias Tuix.Components.Input, as: TextInput
   alias Tuix.Element
   alias Tuix.Layout.Placed
   alias Tuix.Terminal.ANSI
@@ -66,12 +67,71 @@ defmodule Tuix.Renderer do
     end)
   end
 
+  defp do_paint(
+         %Placed{element: %Element{tag: :input} = element, rect: rect},
+         buffer,
+         clip
+       ) do
+    {x, y, w, _h} = rect
+    clip = intersect(clip, rect)
+    props = element.props
+
+    value = display_value(props)
+
+    style = [
+      fg: Map.get(props, :fg),
+      bg: background(props),
+      attrs: Map.get(props, :attrs, [])
+    ]
+
+    buffer = paint_background(buffer, element, rect, clip)
+
+    cond do
+      Map.get(props, :focused, false) ->
+        cursor = Map.get(props, :cursor, String.length(value))
+        {prefix, at_cursor, suffix} = TextInput.window(value, cursor, w)
+        prefix_width = Buffer.text_width(prefix)
+        cursor_style = Keyword.update!(style, :attrs, &[:reverse | &1])
+
+        buffer
+        |> Buffer.put_text(x, y, prefix, style, clip)
+        |> Buffer.put_text(x + prefix_width, y, at_cursor, cursor_style, clip)
+        |> Buffer.put_text(
+          x + prefix_width + Buffer.grapheme_width(at_cursor),
+          y,
+          suffix,
+          style,
+          clip
+        )
+
+      value == "" ->
+        placeholder_style = [
+          fg: Map.get(props, :placeholder_color, :bright_black),
+          bg: background(props)
+        ]
+
+        Buffer.put_text(buffer, x, y, Map.get(props, :placeholder, ""), placeholder_style, clip)
+
+      true ->
+        Buffer.put_text(buffer, x, y, value, style, clip)
+    end
+  end
+
+  defp display_value(props) do
+    value = Map.get(props, :value, "")
+
+    case Map.get(props, :mask) do
+      nil -> value
+      mask -> String.duplicate(mask, String.length(value))
+    end
+  end
+
   defp paint_children(buffer, children, clip) do
     Enum.reduce(children, buffer, &do_paint(&1, &2, clip))
   end
 
   defp paint_background(buffer, %Element{props: props}, rect, clip) do
-    case Map.get(props, :bg) do
+    case background(props) do
       nil -> buffer
       bg -> Buffer.fill(buffer, intersect(clip, rect), %Cell{char: " ", bg: bg})
     end
@@ -89,8 +149,8 @@ defmodule Tuix.Renderer do
 
       {style, true} ->
         {tl, horizontal, tr, vertical, bl, br} = Map.fetch!(@borders, style)
-        color = Map.get(props, :border_color) || Map.get(props, :fg)
-        bg = Map.get(props, :bg)
+        color = border_color(props)
+        bg = background(props)
         text_style = [fg: color, bg: bg]
 
         buffer =
@@ -150,6 +210,21 @@ defmodule Tuix.Renderer do
       true -> :single
       style when is_map_key(@borders, style) -> style
     end
+  end
+
+  # Focused elements (marked by the runtime or Tuix.Focus.mark/2) prefer
+  # their focus_* style props.
+  defp background(props) do
+    focus_style(props, :focus_bg) || Map.get(props, :bg)
+  end
+
+  defp border_color(props) do
+    focus_style(props, :focus_border_color) || Map.get(props, :border_color) ||
+      Map.get(props, :fg)
+  end
+
+  defp focus_style(props, key) do
+    if Map.get(props, :focused, false), do: Map.get(props, key)
   end
 
   defp intersect({x1, y1, w1, h1}, {x2, y2, w2, h2}) do

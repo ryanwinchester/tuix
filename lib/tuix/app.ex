@@ -78,11 +78,34 @@ defmodule Tuix.App do
     %{app | assigns: Map.update!(app.assigns, key, fun)}
   end
 
+  @doc """
+  Returns the id of the currently focused element, or `nil`.
+  """
+  @spec focused(t()) :: term() | nil
+  def focused(%__MODULE__{} = app), do: Map.get(app.private, :focus)
+
+  @doc """
+  Focuses the element with the given id.
+
+  The element should be rendered with `focusable: true` and a matching
+  `:id` prop; if it is absent from the next rendered tree, focus is
+  cleared. Focusing `nil` is equivalent to `blur/1`.
+  """
+  @spec focus(t(), term() | nil) :: t()
+  def focus(%__MODULE__{} = app, nil), do: blur(app)
+  def focus(%__MODULE__{} = app, id), do: %{app | private: Map.put(app.private, :focus, id)}
+
+  @doc """
+  Clears focus.
+  """
+  @spec blur(t()) :: t()
+  def blur(%__MODULE__{} = app), do: %{app | private: Map.delete(app.private, :focus)}
+
   defmacro __using__(_opts) do
     quote do
       @behaviour Tuix.App
 
-      import Tuix.App, only: [assign: 2, assign: 3, update: 3]
+      import Tuix.App, only: [assign: 2, assign: 3, update: 3, focused: 1, focus: 2, blur: 1]
       import Tuix.Components
 
       @impl Tuix.App

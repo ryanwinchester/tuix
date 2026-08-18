@@ -41,6 +41,26 @@ defmodule Tuix.AppTest do
     assert app.assigns.a == 11
   end
 
+  test "focus helpers" do
+    app = %App{}
+    assert App.focused(app) == nil
+
+    app = App.focus(app, :email)
+    assert App.focused(app) == :email
+
+    app = App.focus(app, :password)
+    assert App.focused(app) == :password
+
+    app = App.blur(app)
+    assert App.focused(app) == nil
+  end
+
+  test "focusing nil is equivalent to blur" do
+    app = App.focus(%App{}, :email)
+    assert App.focus(app, nil) == App.blur(app)
+    assert App.focus(%App{}, nil) == %App{}
+  end
+
   test "default callbacks from use Tuix.App" do
     defmodule Minimal do
       use Tuix.App

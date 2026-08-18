@@ -21,20 +21,30 @@ defmodule Tuix.TestRenderer do
   alias Tuix.App
   alias Tuix.Buffer
   alias Tuix.Element
+  alias Tuix.Focus
   alias Tuix.Renderer
 
   @doc """
   Renders an element tree or app module at the given size, returning the
   `Tuix.Buffer` for structured assertions (cell styles, etc).
+
+  The `:focus` option marks the element with that id as focused (applying
+  focus styles), like the runtime does for the focused element; `:cursor`
+  places a focused input's cursor at that grapheme offset (default: end of
+  value). All other options are passed to the app's `mount/2` (module apps
+  only).
   """
   @spec render(Element.t() | module(), pos_integer(), pos_integer(), keyword()) :: Buffer.t()
   def render(element_or_module, width, height, opts \\ [])
 
-  def render(%Element{} = element, width, height, _opts) do
-    Renderer.render(element, width, height)
+  def render(%Element{} = element, width, height, opts) do
+    element
+    |> mark(opts)
+    |> Renderer.render(width, height)
   end
 
   def render(module, width, height, opts) when is_atom(module) do
+    {mark_opts, opts} = Keyword.split(opts, [:focus, :cursor])
     app = %App{module: module}
 
     app =
@@ -47,7 +57,15 @@ defmodule Tuix.TestRenderer do
 
     app.assigns
     |> module.render()
+    |> mark(mark_opts)
     |> Renderer.render(width, height)
+  end
+
+  defp mark(element, opts) do
+    case Keyword.get(opts, :focus) do
+      nil -> element
+      id -> Focus.mark(element, id, opts |> Keyword.take([:cursor]) |> Map.new())
+    end
   end
 
   @doc """
