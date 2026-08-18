@@ -283,6 +283,8 @@ Once published, the docs can be found at <https://hexdocs.pm/tuix>.
 
 ## Demo video
 
+`mix run examples/chat.exs`
+
 https://github.com/user-attachments/assets/080ae9b3-78fd-4cd9-afeb-1ea8e047054b
 
 ## License
