@@ -355,21 +355,30 @@ individual cells and their styles.
 ## Roadmap
 
 - `justify_content` / `align_items` / wrapping in the layout engine
+  ([#2](https://github.com/ryanwinchester/tuix/issues/2))
 - Select enhancements: multi-select, typeahead/filtering, wrap-around
   navigation, `PageUp` / `PageDown`, click-to-select an option
+  ([#3](https://github.com/ryanwinchester/tuix/issues/3))
 - ScrollBox enhancements: scroll-into-view for focused descendants,
   horizontal scrolling, scrollbar dragging
+  ([#4](https://github.com/ryanwinchester/tuix/issues/4))
 - Drag-and-drop: captured drags with `:drag_end` / `:drop` events
+  ([#5](https://github.com/ryanwinchester/tuix/issues/5))
 - Event bubbling: deliver events through the ancestor chain of the hit
   target with a way to stop propagation
+  ([#6](https://github.com/ryanwinchester/tuix/issues/6))
 - Text selection: mouse-driven selection of rendered text with
   copy-to-clipboard (OSC 52)
+  ([#7](https://github.com/ryanwinchester/tuix/issues/7))
 - Dropdown/overlay presentation for selects (needs z-order/overlay
-  machinery)
+  machinery) ([#8](https://github.com/ryanwinchester/tuix/issues/8))
 - Input enhancements: readline-style ctrl bindings, `max_length`, real
   terminal cursor (blinking)
+  ([#9](https://github.com/ryanwinchester/tuix/issues/9))
 - Kitty keyboard protocol
+  ([#10](https://github.com/ryanwinchester/tuix/issues/10))
 - Animation / frame-loop rendering mode
+  ([#11](https://github.com/ryanwinchester/tuix/issues/11))
 
 ## Documentation
 
