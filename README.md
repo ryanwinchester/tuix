@@ -41,6 +41,25 @@ Tuix.run(Counter)
 
 Try it: `mix run examples/counter.exs`
 
+## Table of contents
+
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Core concepts](#core-concepts)
+  - [Apps](#apps)
+  - [Components](#components)
+  - [Events](#events)
+  - [Focus](#focus)
+  - [Inputs](#inputs)
+  - [Selects](#selects)
+  - [Testing](#testing)
+- [Design notes and known trade-offs](#design-notes-and-known-trade-offs)
+- [Roadmap](#roadmap)
+- [Documentation](#documentation)
+- [Demo video](#demo-video)
+- [License](#license)
+
 ## Features
 
 - **LiveView-style apps** - `mount/2`, `handle_event/2`, `handle_info/2`, and
