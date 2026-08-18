@@ -30,8 +30,8 @@ defmodule Counter do
   @impl true
   def render(assigns) do
     box border: :rounded, title: "Counter", padding: 1, gap: 1 do
-      text("Count: #{assigns.count}", fg: "#00FF00", attrs: [:bold])
-      text("Press + to increment, q to quit", fg: :bright_black)
+      text "Count: #{assigns.count}", fg: "#00FF00", attrs: [:bold]
+      text "Press + to increment, q to quit", fg: :bright_black
     end
   end
 end
@@ -107,13 +107,13 @@ nothing.
 
 ```elixir
 box border: :single, flex_direction: :row, gap: 2, padding: 1 do
-  text("left", fg: :cyan)
+  text "left", fg: :cyan
 
   box flex_grow: 1 do
-    text("stretches to fill the remaining space")
+    text "stretches to fill the remaining space"
   end
 
-  text("right", attrs: [:bold, :underline])
+  text "right", attrs: [:bold, :underline]
 end
 ```
 
@@ -147,11 +147,11 @@ def render(assigns) do
   box flex_direction: :row, gap: 1 do
     box id: :left, focusable: true, autofocus: true,
         border: :single, focus_border_color: :cyan do
-      text("left pane")
+      text "left pane"
     end
 
     box id: :right, focusable: true, border: :single, focus_border_color: :cyan do
-      text("right pane")
+      text "right pane"
     end
   end
 end
@@ -182,7 +182,7 @@ style) — or transforms, e.g. to enforce a format:
 def render(assigns) do
   # The box border highlights while the input is focused (focus-within).
   box border: :single, title: "Email", focus_border_color: :cyan do
-    input(id: :email, value: assigns.email, placeholder: "you@example.com")
+    input id: :email, value: assigns.email, placeholder: "you@example.com"
   end
 end
 
@@ -212,7 +212,7 @@ new value immediately:
 ```elixir
 def render(assigns) do
   box border: :single, title: "Plan", focus_border_color: :cyan do
-    select(id: :plan, options: [{"Basic", :basic}, {"Pro", :pro}], value: assigns.plan)
+    select id: :plan, options: [{"Basic", :basic}, {"Pro", :pro}], value: assigns.plan
   end
 end
 

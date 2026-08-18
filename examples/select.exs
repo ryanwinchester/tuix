@@ -46,16 +46,16 @@ defmodule PlanPicker do
   def render(assigns) do
     box padding: 1, gap: 1, width: 40 do
       box border: :rounded, title: "Name", focus_border_color: :cyan do
-        input(id: :name, value: assigns.name, placeholder: "Your name", autofocus: true)
+        input id: :name, value: assigns.name, placeholder: "Your name", autofocus: true
       end
 
       box border: :rounded, title: "Plan", focus_border_color: :cyan do
-        select(id: :plan, options: @plans, value: assigns.plan, selected_fg: :cyan)
+        select id: :plan, options: @plans, value: assigns.plan, selected_fg: :cyan
       end
 
       status(assigns.status)
 
-      text("Tab to switch, ↑/↓ to choose, Enter to confirm, Esc to quit", fg: :bright_black)
+      text "Tab to switch, ↑/↓ to choose, Enter to confirm, Esc to quit", fg: :bright_black
     end
   end
 

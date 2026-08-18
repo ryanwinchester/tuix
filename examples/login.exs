@@ -66,7 +66,7 @@ defmodule Login do
 
       status(assigns.status)
 
-      text("Tab to switch, Enter to submit, Esc to quit", fg: :bright_black)
+      text "Tab to switch, Enter to submit, Esc to quit", fg: :bright_black
     end
   end
 

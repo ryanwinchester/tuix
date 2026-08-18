@@ -54,17 +54,15 @@ defmodule FocusDemo do
               title: "Pane #{pane}",
               padding: 1,
               flex_grow: 1 do
-            text("Count: #{assigns.counts[pane]}", attrs: [:bold])
+            text "Count: #{assigns.counts[pane]}", attrs: [:bold]
           end
         end
       end
 
-      text("Focused: #{assigns.last_focus || "pane one (autofocus)"}", fg: :bright_black)
+      text "Focused: #{assigns.last_focus || "pane one (autofocus)"}", fg: :bright_black
 
-      text(
-        "Tab / Shift+Tab to move focus, 1-3 to jump, Up / Down to change, q to quit",
+      text "Tab / Shift+Tab to move focus, 1-3 to jump, Up / Down to change, q to quit",
         fg: :bright_black
-      )
     end
   end
 end
