@@ -39,18 +39,22 @@ defmodule Tuix.Event do
     `kind` is one of:
 
       * `:press` / `:release` - a button went down / up
+      * `:click` - synthesized by the runtime after a `:release` that lands
+        on the same target its `:press` hit; releasing over a different
+        target cancels the click (dragging within the target does not)
       * `:drag` - the pointer moved while a button was held
       * `:scroll_up` / `:scroll_down` - the wheel turned
 
     `button` is `:left`, `:middle`, or `:right` (`nil` for wheel events and
-    releases that do not report a button). `x` and `y` are 0-based cell
-    coordinates.
+    releases that do not report a button; always set on `:click`). `x` and
+    `y` are 0-based cell coordinates (a `:click` carries the release
+    coordinates).
 
     `target` is the id of the innermost focusable element under the pointer
     (`nil` when none), stamped by the runtime so apps can pattern match on
     it:
 
-        def handle_event(%Mouse{kind: :press, target: :sidebar}, app), do: ...
+        def handle_event(%Mouse{kind: :click, target: :sidebar}, app), do: ...
     """
 
     defstruct kind: nil,
@@ -62,7 +66,7 @@ defmodule Tuix.Event do
               shift: false,
               target: nil
 
-    @type kind :: :press | :release | :drag | :scroll_up | :scroll_down
+    @type kind :: :press | :release | :click | :drag | :scroll_up | :scroll_down
     @type button :: :left | :middle | :right | nil
 
     @type t :: %__MODULE__{

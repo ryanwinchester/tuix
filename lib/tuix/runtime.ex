@@ -5,8 +5,9 @@ defmodule Tuix.Runtime do
   traversal over `focusable` elements, click-to-focus for mouse presses),
   routes keys to the focused component element (see `Tuix.Component`),
   stamps mouse events with the hit-tested target (see `Tuix.HitTest`),
-  scrolls the scroll box under the pointer on wheel events, and re-renders
-  after every state change.
+  scrolls the scroll box under the pointer on wheel events, synthesizes
+  `:click` events from press/release pairs (see `Tuix.Runtime.Click`), and
+  re-renders after every state change.
 
   Rendering is event-driven — nothing is written to the terminal unless
   state may have changed, and only changed cells are written.
@@ -26,6 +27,7 @@ defmodule Tuix.Runtime do
   alias Tuix.Layout
   alias Tuix.Layout.Placed
   alias Tuix.Renderer
+  alias Tuix.Runtime.Click
   alias Tuix.Terminal
 
   @resize_poll_ms 250
@@ -59,6 +61,7 @@ defmodule Tuix.Runtime do
       resize: subscribe_resize(),
       tree: nil,
       placed: nil,
+      pressed: nil,
       focus_order: [],
       autofocused: false
     }
@@ -226,13 +229,22 @@ defmodule Tuix.Runtime do
   defp stamp_target(event, _target), do: event
 
   # Stamps the hit-tested target, applies click-to-focus, and delivers the
-  # mouse event to the app.
+  # mouse event to the app — followed by the synthesized :click event when
+  # a release completes one (see Tuix.Runtime.Click).
   defp deliver_mouse(state, %Event.Mouse{} = event) do
     target = HitTest.focusable_at(state.placed, {event.x, event.y})
     event = %{event | target: target}
     app = click_focus(state.app, event, state.focus_order)
+    {pressed, click} = Click.track(state.pressed, event)
+    state = %{state | pressed: pressed}
 
-    dispatch(state, fn -> state.module.handle_event(event, app) end)
+    case dispatch(state, fn -> state.module.handle_event(event, app) end) do
+      {:noreply, state} when click != nil ->
+        dispatch(state, fn -> state.module.handle_event(click, state.app) end)
+
+      reply ->
+        reply
+    end
   end
 
   # Click-to-focus: a left press on a focusable element moves focus to it.

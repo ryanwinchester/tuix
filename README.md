@@ -75,9 +75,9 @@ Try it: `mix run examples/counter.exs`
   conditionals and comprehensions compose naturally inside `do` blocks.
 - **Keyboard focus** - mark boxes `focusable` and Tab / Shift+Tab traversal,
   focus styling, and per-element event targeting come for free.
-- **Mouse support** - clicks focus focusable elements, and every press,
-  release, drag, and wheel event reaches the app with the element under
-  the pointer as `target`.
+- **Mouse support** - clicks focus focusable elements, the wheel scrolls
+  scroll boxes, releases synthesize GUI-style `:click` events, and every
+  event reaches the app with the element under the pointer as `target`.
 - **Text input** - a controlled, grapheme-aware single-line input with
   cursor, placeholder, masking, and horizontal scrolling; edits arrive as
   events and the app owns the value.
@@ -212,8 +212,8 @@ framework, like keyboard scrolling. Everything else (and wheel events away
 from any scroll box) reaches `handle_event/2` as a `%Tuix.Event.Mouse{}`
 with:
 
-- `kind` - `:press`, `:release`, `:drag` (pointer moved with a button
-  held), `:scroll_up`, or `:scroll_down`
+- `kind` - `:press`, `:release`, `:click`, `:drag` (pointer moved with a
+  button held), `:scroll_up`, or `:scroll_down`
 - `button` - `:left`, `:middle`, `:right`, or `nil` (wheel events)
 - `x` / `y` - 0-based cell coordinates
 - `ctrl` / `alt` / `shift` modifier flags
@@ -221,8 +221,13 @@ with:
   (`nil` when none), so apps can pattern match per element:
 
 ```elixir
-def handle_event(%Tuix.Event.Mouse{kind: :press, target: :sidebar}, app), do: ...
+def handle_event(%Tuix.Event.Mouse{kind: :click, target: :sidebar}, app), do: ...
 ```
+
+A `:click` is synthesized after a `:release` that lands on the same target
+its `:press` hit - releasing over a different element cancels it, so apps
+get GUI-style click semantics without tracking press/release pairs
+themselves. The raw `:press` and `:release` events are still delivered.
 
 While mouse reporting is active the terminal's native text selection is
 unavailable; pass `mouse: false` to `Tuix.run/2` to keep it:
@@ -354,6 +359,11 @@ individual cells and their styles.
   navigation, `PageUp` / `PageDown`, click-to-select an option
 - ScrollBox enhancements: scroll-into-view for focused descendants,
   horizontal scrolling, scrollbar dragging
+- Drag-and-drop: captured drags with `:drag_end` / `:drop` events
+- Event bubbling: deliver events through the ancestor chain of the hit
+  target with a way to stop propagation
+- Text selection: mouse-driven selection of rendered text with
+  copy-to-clipboard (OSC 52)
 - Dropdown/overlay presentation for selects (needs z-order/overlay
   machinery)
 - Input enhancements: readline-style ctrl bindings, `max_length`, real
