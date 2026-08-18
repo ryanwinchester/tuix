@@ -354,6 +354,9 @@ individual cells and their styles.
 
 ## Roadmap
 
+If there's a roadmap item you'd like to see, upvote its issue with a 👍
+reaction. Items with more upvotes will receive more attention.
+
 - `justify_content` / `align_items` / wrapping in the layout engine
   ([#2](https://github.com/ryanwinchester/tuix/issues/2))
 - Select enhancements: multi-select, typeahead/filtering, wrap-around
