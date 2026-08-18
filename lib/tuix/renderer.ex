@@ -8,6 +8,7 @@ defmodule Tuix.Renderer do
   alias Tuix.Cell
   alias Tuix.Color
   alias Tuix.Components.Input, as: TextInput
+  alias Tuix.Components.Select, as: ListSelect
   alias Tuix.Element
   alias Tuix.Layout.Placed
   alias Tuix.Terminal.ANSI
@@ -117,6 +118,49 @@ defmodule Tuix.Renderer do
     end
   end
 
+  defp do_paint(
+         %Placed{element: %Element{tag: :select} = element, rect: rect},
+         buffer,
+         clip
+       ) do
+    {x, y, _w, h} = rect
+    clip = intersect(clip, rect)
+    props = element.props
+
+    options = ListSelect.options(props)
+    selected = ListSelect.selected_index(options, Map.get(props, :value))
+    offset = ListSelect.offset(selected, length(options), h)
+
+    marker = ListSelect.marker(props)
+    pad = String.duplicate(" ", ListSelect.marker_width(props))
+
+    style = [
+      fg: Map.get(props, :fg),
+      bg: background(props),
+      attrs: Map.get(props, :attrs, [])
+    ]
+
+    selected_style = [
+      fg: Map.get(props, :selected_fg) || Map.get(props, :fg),
+      bg: background(props),
+      attrs: Map.get(props, :selected_attrs, [:bold])
+    ]
+
+    buffer = paint_background(buffer, element, rect, clip)
+
+    options
+    |> Enum.drop(offset)
+    |> Enum.take(max(h, 0))
+    |> Enum.with_index(offset)
+    |> Enum.reduce(buffer, fn {{label, _value}, index}, buf ->
+      if index == selected do
+        Buffer.put_text(buf, x, y + index - offset, marker <> label, selected_style, clip)
+      else
+        Buffer.put_text(buf, x, y + index - offset, pad <> label, style, clip)
+      end
+    end)
+  end
+
   defp display_value(props) do
     value = Map.get(props, :value, "")
 
@@ -212,19 +256,29 @@ defmodule Tuix.Renderer do
     end
   end
 
-  # Focused elements (marked by the runtime or Tuix.Focus.mark/2) prefer
-  # their focus_* style props.
+  # Focused elements (marked by the runtime or Tuix.Focus.mark/3) prefer
+  # their focus_* style props. Ancestors of the focused element
+  # (focus_within) prefer focus_within_*, falling back to focus_*.
   defp background(props) do
-    focus_style(props, :focus_bg) || Map.get(props, :bg)
+    focus_style(props, :focus_within_bg, :focus_bg) || Map.get(props, :bg)
   end
 
   defp border_color(props) do
-    focus_style(props, :focus_border_color) || Map.get(props, :border_color) ||
-      Map.get(props, :fg)
+    focus_style(props, :focus_within_border_color, :focus_border_color) ||
+      Map.get(props, :border_color) || Map.get(props, :fg)
   end
 
-  defp focus_style(props, key) do
-    if Map.get(props, :focused, false), do: Map.get(props, key)
+  defp focus_style(props, within_key, focus_key) do
+    cond do
+      Map.get(props, :focused, false) ->
+        Map.get(props, focus_key)
+
+      Map.get(props, :focus_within, false) ->
+        Map.get(props, within_key) || Map.get(props, focus_key)
+
+      true ->
+        nil
+    end
   end
 
   defp intersect({x1, y1, w1, h1}, {x2, y2, w2, h2}) do

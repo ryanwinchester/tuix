@@ -26,9 +26,13 @@ defmodule Tuix.Components do
     * `:focus_border_color` - border color while focused (overrides
       `:border_color`)
     * `:focus_bg` - background fill while focused (overrides `:bg`)
+    * `:focus_within_border_color` / `:focus_within_bg` - styles applied
+      while a descendant is focused; fall back to the `focus_*` props
 
-  The runtime sets `focused: true` on the focused element's props before
-  painting; see `Tuix.Focus`.
+  Focus styles also apply while a descendant has focus (e.g. a bordered box
+  wrapping a focused input): the runtime sets `focused: true` on the focused
+  element's props and `focus_within: true` on its ancestors before painting;
+  see `Tuix.Focus`.
 
   ## Input props
 
@@ -38,6 +42,18 @@ defmodule Tuix.Components do
     * `:placeholder_color` - color of the placeholder (default `:bright_black`)
     * `:mask` - replaces each grapheme on display, e.g. `"•"` for passwords
     * `:width` / `:fg` / `:bg` / `:attrs` and the focus props above
+
+  ## Select props
+
+    * `:id` - required; also makes the select focusable by default
+    * `:options` - list of `{label, value}` tuples, or bare strings (which
+      are their own value)
+    * `:value` - the currently selected value (owned by the app)
+    * `:marker` - prefix drawn on the selected row (default `"❯ "`); other
+      rows are padded to match
+    * `:selected_fg` - foreground of the selected row (default: inherits `:fg`)
+    * `:selected_attrs` - attrs of the selected row (default `[:bold]`)
+    * `:fg` / `:bg` / `:attrs` and the focus props above
 
   ## Text props
 
@@ -118,6 +134,36 @@ defmodule Tuix.Components do
     end
 
     Element.new(:input, Keyword.put_new(props, :focusable, true))
+  end
+
+  @doc """
+  Builds a vertical list-picker element.
+
+  Selects join the Tab focus order automatically (`focusable: true`) and
+  require an `:id`. They are controlled: the selection follows the
+  highlight, so `:up` / `:down` / `:home` / `:end` emit
+  `%Tuix.Event.Select{}` with the new value immediately, and the app
+  assigns it back into state:
+
+      select(id: :plan, options: [{"Basic", :basic}, {"Pro", :pro}], value: assigns.plan)
+
+      def handle_event(%Tuix.Event.Select{id: :plan, value: value}, app),
+        do: {:noreply, assign(app, plan: value)}
+
+  Navigation is clamped (no wrap-around). `:enter`, `:space`, and
+  everything else fall through to the app with `target` set — so
+  commit-on-Enter flows keep a draft value in assigns and match
+  `%Tuix.Event.Key{key: :enter, target: :plan}`. When the select is
+  shorter than its option list, it scrolls to keep the selection visible.
+  See the module docs above for the accepted props.
+  """
+  @spec select(keyword()) :: Element.t()
+  def select(props) when is_list(props) do
+    unless Keyword.has_key?(props, :id) do
+      raise ArgumentError, "select/1 requires an :id prop"
+    end
+
+    Element.new(:select, Keyword.put_new(props, :focusable, true))
   end
 
   @doc """

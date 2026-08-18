@@ -53,6 +53,9 @@ Try it: `mix run examples/counter.exs`
 - **Text input** - a controlled, grapheme-aware single-line input with
   cursor, placeholder, masking, and horizontal scrolling; edits arrive as
   events and the app owns the value.
+- **Select** - a controlled list picker: arrow keys move the selection,
+  changes arrive as events, and long lists scroll to keep the selection
+  visible.
 - **Flexbox-subset layout** - `flex_direction`, `flex_grow`, `gap`,
   `padding`, borders, fixed and percentage sizes.
 - **Diffed rendering** - frames are cell buffers; unchanged rows are skipped
@@ -161,6 +164,11 @@ Focus can also be controlled programmatically with `focus/2` and `blur/1`
 is delivered to the app as a `%Tuix.Event.Focus{id: new, from: old}` event.
 If the focused element disappears from the tree, focus is cleared.
 
+Focus styles also apply to ancestors of the focused element (CSS
+`:focus-within`), so a bordered box wrapping a focused input highlights
+automatically; use `focus_within_border_color` / `focus_within_bg` to style
+ancestors differently from the focused element itself.
+
 Try it: `mix run examples/focus.exs`
 
 ### Inputs
@@ -172,7 +180,8 @@ style) — or transforms, e.g. to enforce a format:
 
 ```elixir
 def render(assigns) do
-  box border: :single, title: "Email" do
+  # The box border highlights while the input is focused (focus-within).
+  box border: :single, title: "Email", focus_border_color: :cyan do
     input(id: :email, value: assigns.email, placeholder: "you@example.com")
   end
 end
@@ -192,6 +201,31 @@ ctrl combos, Tab traversal — falls through to the app with `target` set.
 keep the cursor visible.
 
 Try it: `mix run examples/login.exs`
+
+### Selects
+
+`select/1` builds a vertical list picker. Like inputs, selects are
+focusable by default and controlled — the selection follows the highlight,
+so `:up` / `:down` / `:home` / `:end` emit `%Tuix.Event.Select{}` with the
+new value immediately:
+
+```elixir
+def render(assigns) do
+  box border: :single, title: "Plan", focus_border_color: :cyan do
+    select(id: :plan, options: [{"Basic", :basic}, {"Pro", :pro}], value: assigns.plan)
+  end
+end
+
+def handle_event(%Tuix.Event.Select{id: :plan, value: value}, app),
+  do: {:noreply, assign(app, plan: value)}
+```
+
+Options are `{label, value}` tuples or bare strings. Navigation clamps at
+the boundaries, `:enter` falls through with `target` set (keep a draft
+value in assigns for commit-on-Enter flows), and lists taller than the
+select scroll to keep the selection visible.
+
+Try it: `mix run examples/select.exs`
 
 ### Testing
 
@@ -224,9 +258,16 @@ individual cells and their styles.
 
 ## Roadmap
 
-- Select and ScrollBox components (built on the focus model)
+- ScrollBox component (built on the focus model), including scrollbar
+  rendering
 - Mouse support
 - `justify_content` / `align_items` / wrapping in the layout engine
+- Select enhancements: multi-select, typeahead/filtering, wrap-around
+  navigation, `PageUp` / `PageDown`
+- Dropdown/overlay presentation for selects (needs z-order/overlay
+  machinery)
+- Input enhancements: readline-style ctrl bindings, `max_length`, real
+  terminal cursor (blinking)
 - Kitty keyboard protocol
 - Animation / frame-loop rendering mode
 

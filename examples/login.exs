@@ -5,7 +5,7 @@
 #   * two controlled inputs (value lives in assigns, updated from
 #     %Tuix.Event.Input{} events)
 #   * Tab / Shift+Tab move between them; the focused field's border
-#     highlights (tracked via %Tuix.Event.Focus{} events)
+#     highlights via focus_border_color on the wrapping box (focus-within)
 #   * the password input is masked
 #   * Enter submits (falls through to the app with `target` set)
 defmodule Login do
@@ -15,9 +15,7 @@ defmodule Login do
 
   @impl true
   def mount(_opts, app) do
-    # :email matches the autofocus below; later changes arrive as
-    # %Tuix.Event.Focus{} events.
-    {:ok, assign(app, email: "", password: "", focused: :email, status: nil)}
+    {:ok, assign(app, email: "", password: "", status: nil)}
   end
 
   @impl true
@@ -27,10 +25,6 @@ defmodule Login do
 
   def handle_event(%Event.Input{id: :password, value: value}, app) do
     {:noreply, assign(app, password: value, status: nil)}
-  end
-
-  def handle_event(%Event.Focus{id: id}, app) do
-    {:noreply, assign(app, focused: id)}
   end
 
   def handle_event(%Event.Key{key: :enter}, app) do
@@ -51,8 +45,6 @@ defmodule Login do
   def render(assigns) do
     box padding: 1, gap: 1, width: 40 do
       field(
-        assigns,
-        :email,
         "Email",
         input(
           id: :email,
@@ -63,8 +55,6 @@ defmodule Login do
       )
 
       field(
-        assigns,
-        :password,
         "Password",
         input(
           id: :password,
@@ -80,10 +70,10 @@ defmodule Login do
     end
   end
 
-  defp field(assigns, id, title, input_element) do
-    border_color = if assigns.focused == id, do: :cyan
-
-    box border: :rounded, title: title, border_color: border_color, padding: 0 do
+  # The box highlights while its input has focus (focus-within): no
+  # assigns bookkeeping needed.
+  defp field(title, input_element) do
+    box border: :rounded, title: title, focus_border_color: :magenta do
       input_element
     end
   end

@@ -5,8 +5,10 @@ defmodule Tuix.Focus do
   Elements opt into the focus ring with `focusable: true` and a stable `:id`
   prop. The runtime collects the focus order from each rendered tree
   (depth-first document order), moves focus on Tab / Shift+Tab, and marks the
-  focused element with `focused: true` before painting so focus styles
-  (`:focus_border_color`, `:focus_bg`) apply.
+  focused element with `focused: true` — and its ancestors with
+  `focus_within: true` — before painting so focus styles
+  (`:focus_border_color`, `:focus_bg`, and the `focus_within_*` variants)
+  apply.
 
   These are pure functions over element trees; the runtime owns the state
   (in `Tuix.App` `private`, exposed through `Tuix.App.focused/1`,
@@ -95,19 +97,37 @@ defmodule Tuix.Focus do
   @doc """
   Marks the focusable element with the given id by setting `focused: true`
   in its props, merging in any `extra_props` (e.g. the runtime injects the
-  cursor offset for focused inputs). With `id` as `nil`, returns the tree
-  unchanged.
+  cursor offset for focused inputs). Every ancestor on the path to the
+  focused element gets `focus_within: true` (CSS `:focus-within`), so
+  wrapper boxes can style themselves while a descendant is focused. With
+  `id` as `nil`, returns the tree unchanged.
   """
   @spec mark(Element.t(), term() | nil, map()) :: Element.t()
   def mark(tree, id, extra_props \\ %{})
   def mark(%Element{} = tree, nil, _extra_props), do: tree
-  def mark(%Element{} = tree, id, extra_props), do: do_mark(tree, id, extra_props)
+
+  def mark(%Element{} = tree, id, extra_props) do
+    {marked, _found} = do_mark(tree, id, extra_props)
+    marked
+  end
 
   defp do_mark(%Element{props: props} = element, id, extra_props) do
     if Map.get(props, :focusable, false) and Map.get(props, :id) == id do
-      %{element | props: props |> Map.put(:focused, true) |> Map.merge(extra_props)}
+      {%{element | props: props |> Map.put(:focused, true) |> Map.merge(extra_props)}, true}
     else
-      %{element | children: Enum.map(element.children, &do_mark(&1, id, extra_props))}
+      {children, found} =
+        Enum.map_reduce(element.children, false, fn child, found ->
+          {child, child_found} = do_mark(child, id, extra_props)
+          {child, found or child_found}
+        end)
+
+      element = %{element | children: children}
+
+      if found do
+        {%{element | props: Map.put(element.props, :focus_within, true)}, true}
+      else
+        {element, false}
+      end
     end
   end
 

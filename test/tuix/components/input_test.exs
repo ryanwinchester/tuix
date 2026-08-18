@@ -88,6 +88,38 @@ defmodule Tuix.Components.InputTest do
     end
   end
 
+  describe "on_key/3 (Tuix.Component)" do
+    test "value changes emit an Event.Input with the new cursor state" do
+      assert Input.on_key(key("c"), %{id: :name, value: "ab"}, 2) ==
+               {:emit, %Tuix.Event.Input{id: :name, value: "abc"}, 3}
+    end
+
+    test "cursor-only changes update state" do
+      assert Input.on_key(key(:left), %{id: :name, value: "ab"}, 2) == {:update, 1}
+    end
+
+    test "unhandled keys are ignored" do
+      assert Input.on_key(key(:enter), %{id: :name, value: "ab"}, 2) == :ignored
+    end
+
+    test "nil state defaults the cursor to the end of the value" do
+      assert Input.on_key(key(:left), %{id: :name, value: "ab"}, nil) == {:update, 1}
+    end
+
+    test "stored cursor is clamped when the app shortened the value" do
+      assert Input.on_key(key("!"), %{id: :name, value: "ab"}, 99) ==
+               {:emit, %Tuix.Event.Input{id: :name, value: "ab!"}, 3}
+    end
+  end
+
+  describe "mark_props/2" do
+    test "injects the normalized cursor" do
+      assert Input.mark_props(%{value: "ab"}, nil) == %{cursor: 2}
+      assert Input.mark_props(%{value: "ab"}, 1) == %{cursor: 1}
+      assert Input.mark_props(%{value: "ab"}, 99) == %{cursor: 2}
+    end
+  end
+
   describe "window/3" do
     test "no scroll when the value fits" do
       assert Input.window("abc", 1, 10) == {"a", "b", "c"}

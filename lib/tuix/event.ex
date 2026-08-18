@@ -57,6 +57,24 @@ defmodule Tuix.Event do
     @type t :: %__MODULE__{id: term(), value: String.t()}
   end
 
+  defmodule Select do
+    @moduledoc """
+    Delivered when a focused select's selection moves (selects are
+    controlled and the selection follows the highlight, so `:up` / `:down`
+    emit this immediately).
+
+    The app owns the value: assign it back into state for the selection
+    to appear.
+
+        def handle_event(%Tuix.Event.Select{id: :plan, value: value}, app),
+          do: {:noreply, assign(app, plan: value)}
+    """
+
+    defstruct [:id, :value]
+
+    @type t :: %__MODULE__{id: term(), value: term()}
+  end
+
   defmodule Focus do
     @moduledoc """
     Delivered when focus moves — via Tab traversal or programmatically with
@@ -71,5 +89,5 @@ defmodule Tuix.Event do
     @type t :: %__MODULE__{id: term() | nil, from: term() | nil}
   end
 
-  @type t :: Key.t() | Resize.t() | Input.t() | Focus.t()
+  @type t :: Key.t() | Resize.t() | Input.t() | Select.t() | Focus.t()
 end

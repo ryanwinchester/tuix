@@ -2,8 +2,9 @@ defmodule Tuix.Runtime do
   @moduledoc """
   The event loop: holds the `Tuix.App` state, dispatches input and resize
   events to the app's callbacks, manages keyboard focus (Tab / Shift+Tab
-  traversal over `focusable` elements), routes keys to the focused input
-  element, and re-renders after every state change.
+  traversal over `focusable` elements), routes keys to the focused
+  component element (see `Tuix.Component`), and re-renders after every
+  state change.
 
   Rendering is event-driven — nothing is written to the terminal unless
   state may have changed, and only changed cells are written.
@@ -14,7 +15,6 @@ defmodule Tuix.Runtime do
   use GenServer, restart: :temporary
 
   alias Tuix.App
-  alias Tuix.Components.Input, as: TextInput
   alias Tuix.Element
   alias Tuix.Event
   alias Tuix.Focus
@@ -22,6 +22,12 @@ defmodule Tuix.Runtime do
   alias Tuix.Terminal
 
   @resize_poll_ms 250
+
+  # Tag -> Tuix.Component module for focusable, stateful element kinds.
+  @components %{
+    input: Tuix.Components.Input,
+    select: Tuix.Components.Select
+  }
 
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
@@ -78,13 +84,14 @@ defmodule Tuix.Runtime do
     dispatch(state, fn -> {:noreply, app} end)
   end
 
-  # Keys are offered to the focused input first (insert, delete, cursor
-  # movement); keys the input does not handle — and all keys when nothing
-  # focused is an input — fall through to the app with `target` set.
+  # Keys are offered to the focused component first (input editing, select
+  # navigation); keys the component does not handle — and all keys when the
+  # focused element is not a component — fall through to the app with
+  # `target` set.
   def handle_info({:tuix_input, event}, state) do
     focused = App.focused(state.app)
 
-    case route_to_input(state, event, focused) do
+    case route_to_component(state, event, focused) do
       :fallthrough ->
         event = stamp_target(event, focused)
         dispatch(state, fn -> state.module.handle_event(event, state.app) end)
@@ -184,26 +191,25 @@ defmodule Tuix.Runtime do
   defp stamp_target(%Event.Key{} = event, target), do: %{event | target: target}
   defp stamp_target(event, _target), do: event
 
-  ## Input routing
+  ## Component routing
 
-  defp route_to_input(state, %Event.Key{} = event, focused) do
-    case focused_input(state.tree, focused) do
+  defp route_to_component(state, %Event.Key{} = event, focused) do
+    case focused_component(state.tree, focused) do
       nil ->
         :fallthrough
 
-      %Element{props: props} ->
-        value = Map.get(props, :value, "")
-        cursor = cursor(state.app, focused, value)
+      {module, %Element{props: props}} ->
+        case module.on_key(event, props, component_state(state.app, focused)) do
+          {:emit, component_event, new_state} ->
+            # Components are controlled: report the change and let the app
+            # apply it.
+            app = put_component_state(state.app, focused, new_state)
+            dispatch(state, fn -> state.module.handle_event(component_event, app) end)
 
-        case TextInput.edit(value, cursor, event) do
-          {:changed, new_value, new_cursor} ->
-            # The app owns the value: report it and let the app assign it.
-            app = put_cursor(state.app, focused, new_cursor)
-            input_event = %Event.Input{id: focused, value: new_value}
-            dispatch(state, fn -> state.module.handle_event(input_event, app) end)
-
-          {:moved, new_cursor} ->
-            dispatch(state, fn -> {:noreply, put_cursor(state.app, focused, new_cursor)} end)
+          {:update, new_state} ->
+            dispatch(state, fn ->
+              {:noreply, put_component_state(state.app, focused, new_state)}
+            end)
 
           :ignored ->
             :fallthrough
@@ -211,42 +217,44 @@ defmodule Tuix.Runtime do
     end
   end
 
-  defp route_to_input(_state, _event, _focused), do: :fallthrough
+  defp route_to_component(_state, _event, _focused), do: :fallthrough
 
-  defp focused_input(%Element{} = tree, focused) do
-    case Focus.find(tree, focused) do
-      %Element{tag: :input} = element -> element
+  defp focused_component(%Element{} = tree, focused) do
+    with %Element{tag: tag} = element <- Focus.find(tree, focused),
+         {:ok, module} <- Map.fetch(@components, tag) do
+      {module, element}
+    else
       _other -> nil
     end
   end
 
-  defp focused_input(_tree, _focused), do: nil
+  defp focused_component(_tree, _focused), do: nil
 
-  # The cursor for an input: stored offset clamped to the value (the app
-  # may have shortened it), defaulting to the end of the value.
-  defp cursor(app, id, value) do
-    case app.private |> Map.get(:input_cursors, %{}) |> Map.fetch(id) do
-      {:ok, cursor} -> min(cursor, String.length(value))
-      :error -> String.length(value)
-    end
+  defp component_state(app, id) do
+    app.private |> Map.get(:component_state, %{}) |> Map.get(id)
   end
 
-  defp put_cursor(app, id, cursor) do
-    cursors = app.private |> Map.get(:input_cursors, %{}) |> Map.put(id, cursor)
-    %{app | private: Map.put(app.private, :input_cursors, cursors)}
+  defp put_component_state(app, id, component_state) do
+    states = app.private |> Map.get(:component_state, %{}) |> Map.put(id, component_state)
+    %{app | private: Map.put(app.private, :component_state, states)}
   end
 
-  # Drops cursor state for inputs that left the tree.
-  defp prune_cursors(app, order) do
-    case Map.get(app.private, :input_cursors) do
+  # Drops ephemeral state for components that left the tree.
+  defp prune_component_state(app, order) do
+    case Map.get(app.private, :component_state) do
       nil ->
         app
 
-      cursors ->
-        case Map.take(cursors, order) do
-          ^cursors -> app
-          pruned when pruned == %{} -> %{app | private: Map.delete(app.private, :input_cursors)}
-          pruned -> %{app | private: Map.put(app.private, :input_cursors, pruned)}
+      states ->
+        case Map.take(states, order) do
+          ^states ->
+            app
+
+          pruned when pruned == %{} ->
+            %{app | private: Map.delete(app.private, :component_state)}
+
+          pruned ->
+            %{app | private: Map.put(app.private, :component_state, pruned)}
         end
     end
   end
@@ -275,7 +283,7 @@ defmodule Tuix.Runtime do
     app =
       state.app
       |> reconcile_focus(tree, order, state)
-      |> prune_cursors(order)
+      |> prune_component_state(order)
 
     focused = App.focused(app)
 
@@ -289,12 +297,12 @@ defmodule Tuix.Runtime do
     %{state | app: app, tree: tree, focus_order: order, autofocused: true, prev_buffer: buffer}
   end
 
-  # Extra props injected into the focused element before painting: focused
-  # inputs get their cursor offset.
+  # Extra props injected into the focused element before painting (e.g. a
+  # focused input's cursor offset).
   defp mark_props(app, tree, focused) do
-    case focused_input(tree, focused) do
+    case focused_component(tree, focused) do
       nil -> %{}
-      %Element{props: props} -> %{cursor: cursor(app, focused, Map.get(props, :value, ""))}
+      {module, %Element{props: props}} -> module.mark_props(props, component_state(app, focused))
     end
   end
 

@@ -135,6 +135,26 @@ defmodule Tuix.FocusTest do
       assert first.props.focused == true
       assert first.props.cursor == 3
     end
+
+    test "marks ancestors of the focused element with focus_within" do
+      marked = Focus.mark(tree(), :nested)
+
+      assert marked.props.focus_within == true
+
+      [first, row, last] = marked.children
+      assert row.props.focus_within == true
+      refute Map.has_key?(first.props, :focus_within)
+      refute Map.has_key?(last.props, :focus_within)
+
+      [nested | _rest] = row.children
+      assert nested.props.focused == true
+      refute Map.has_key?(nested.props, :focus_within)
+    end
+
+    test "no focus_within marks when the id is not in the tree" do
+      marked = Focus.mark(tree(), :missing)
+      refute Map.has_key?(marked.props, :focus_within)
+    end
   end
 
   describe "find/2" do

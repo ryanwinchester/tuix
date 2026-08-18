@@ -13,7 +13,10 @@ defmodule Tuix.Layout do
   """
 
   alias Tuix.Buffer
+  alias Tuix.Components.Select
   alias Tuix.Element
+
+  @leaf_tags [:text, :input, :select]
 
   defmodule Placed do
     @moduledoc "An element resolved to an absolute rectangle."
@@ -40,7 +43,7 @@ defmodule Tuix.Layout do
   end
 
   # Places an element at an exact rectangle and lays out its children inside.
-  defp place(%Element{tag: tag} = element, rect) when tag in [:text, :input] do
+  defp place(%Element{tag: tag} = element, rect) when tag in @leaf_tags do
     %Placed{element: element, rect: rect}
   end
 
@@ -119,11 +122,11 @@ defmodule Tuix.Layout do
     do: resolve_size(child, :height, avail) || intrinsic(child, :height, cross_avail)
 
   # Cross-axis size: explicit prop, else stretch for boxes / intrinsic for
-  # leaves (text, input).
-  defp cross_size(%Element{tag: tag} = child, :row, avail, _main) when tag in [:text, :input],
+  # leaves (text, input, select).
+  defp cross_size(%Element{tag: tag} = child, :row, avail, _main) when tag in @leaf_tags,
     do: resolve_size(child, :height, avail) || min(intrinsic(child, :height, avail), avail)
 
-  defp cross_size(%Element{tag: tag} = child, :column, avail, _main) when tag in [:text, :input],
+  defp cross_size(%Element{tag: tag} = child, :column, avail, _main) when tag in @leaf_tags,
     do: resolve_size(child, :width, avail) || min(intrinsic(child, :width, avail), avail)
 
   defp cross_size(child, :row, avail, _main), do: resolve_size(child, :height, avail) || avail
@@ -147,6 +150,21 @@ defmodule Tuix.Layout do
   end
 
   defp intrinsic(%Element{tag: :input}, :height, _cross), do: 1
+
+  # Selects render one option per row; width fits the marker plus the
+  # widest label.
+  defp intrinsic(%Element{tag: :select, props: props}, :width, _cross) do
+    labels_max =
+      props
+      |> Select.options()
+      |> Enum.map(fn {label, _value} -> Buffer.text_width(label) end)
+      |> Enum.max(fn -> 0 end)
+
+    Select.marker_width(props) + labels_max
+  end
+
+  defp intrinsic(%Element{tag: :select, props: props}, :height, _cross),
+    do: props |> Select.options() |> length()
 
   defp intrinsic(%Element{tag: :box} = element, dimension, cross) do
     inset = 2 * (border_inset(element) + padding(element))

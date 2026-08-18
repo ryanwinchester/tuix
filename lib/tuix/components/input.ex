@@ -4,21 +4,52 @@ defmodule Tuix.Components.Input do
   grapheme-aware functions over a value and a cursor offset.
 
   Inputs are controlled: the app owns the value in assigns. When a key
-  reaches a focused input, the runtime calls `edit/3` against the value from
-  the last rendered tree and the cursor it manages (in `Tuix.App` `private`),
-  then reports value changes to the app as `%Tuix.Event.Input{}` events.
-  Keys the input does not handle fall through to the app's
-  `c:Tuix.App.handle_event/2` with `target` set.
+  reaches a focused input, the runtime calls `on_key/3` (the
+  `Tuix.Component` behaviour) with the value from the last rendered tree
+  and the cursor it manages (in `Tuix.App` `private`), then reports value
+  changes to the app as `%Tuix.Event.Input{}` events. Keys the input does
+  not handle fall through to the app's `c:Tuix.App.handle_event/2` with
+  `target` set.
 
   Cursor offsets are grapheme indices (`0..String.length(value)`), so wide
   characters (CJK, emoji) count as one position.
   """
 
+  @behaviour Tuix.Component
+
   alias Tuix.Buffer
+  alias Tuix.Event
   alias Tuix.Event.Key
 
   @typedoc "A grapheme offset into the value, `0..String.length(value)`."
   @type cursor :: non_neg_integer()
+
+  @impl Tuix.Component
+  def on_key(%Key{} = key, props, state) do
+    value = Map.get(props, :value, "")
+    cursor = normalize_cursor(state, value)
+
+    case edit(value, cursor, key) do
+      {:changed, new_value, new_cursor} ->
+        {:emit, %Event.Input{id: Map.get(props, :id), value: new_value}, new_cursor}
+
+      {:moved, new_cursor} ->
+        {:update, new_cursor}
+
+      :ignored ->
+        :ignored
+    end
+  end
+
+  @impl Tuix.Component
+  def mark_props(props, state) do
+    %{cursor: normalize_cursor(state, Map.get(props, :value, ""))}
+  end
+
+  # The stored cursor clamped to the value (the app may have shortened it),
+  # defaulting to the end of the value on first focus.
+  defp normalize_cursor(nil, value), do: String.length(value)
+  defp normalize_cursor(cursor, value), do: min(cursor, String.length(value))
 
   @typedoc """
   The result of applying a key:

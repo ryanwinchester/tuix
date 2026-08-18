@@ -134,6 +134,58 @@ defmodule Tuix.RendererTest do
       assert %Cell{char: " ", bg: :blue} = Buffer.at(unfocused, 0, 0)
     end
 
+    test "wrapper box highlights while a descendant is focused (focus-within)" do
+      element =
+        box border: :single, focus_border_color: :cyan, width: 6, height: 3 do
+          input(id: :name, value: "x")
+        end
+
+      focused = TestRenderer.render(element, 6, 3, focus: :name)
+      assert %Cell{char: "┌", fg: :cyan} = Buffer.at(focused, 0, 0)
+
+      unfocused = TestRenderer.render(element, 6, 3)
+      assert %Cell{char: "┌", fg: nil} = Buffer.at(unfocused, 0, 0)
+    end
+
+    test "focus_within_border_color overrides focus_border_color on ancestors" do
+      element =
+        box border: :single,
+            focus_border_color: :cyan,
+            focus_within_border_color: :magenta,
+            width: 6,
+            height: 3 do
+          input(id: :name)
+        end
+
+      buffer = TestRenderer.render(element, 6, 3, focus: :name)
+      assert %Cell{fg: :magenta} = Buffer.at(buffer, 0, 0)
+    end
+
+    test "the focused element itself ignores focus_within_* props" do
+      element =
+        box(
+          id: :pane,
+          focusable: true,
+          border: :single,
+          focus_border_color: :cyan,
+          focus_within_border_color: :magenta,
+          width: 4
+        )
+
+      buffer = TestRenderer.render(element, 4, 3, focus: :pane)
+      assert %Cell{fg: :cyan} = Buffer.at(buffer, 0, 0)
+    end
+
+    test "focus_within_bg falls back to focus_bg" do
+      element =
+        box focus_bg: :green, width: 4, height: 2 do
+          input(id: :name)
+        end
+
+      buffer = TestRenderer.render(element, 4, 2, focus: :name)
+      assert %Cell{bg: :green} = Buffer.at(buffer, 0, 1)
+    end
+
     test "focus styles only apply to the focused element" do
       element =
         box flex_direction: :row do
@@ -207,6 +259,97 @@ defmodule Tuix.RendererTest do
 
       assert_raise ArgumentError, ~r/requires an :id prop/, fn ->
         input(placeholder: "nope")
+      end
+    end
+  end
+
+  describe "select painting" do
+    defp plans(props \\ []) do
+      select([id: :plan, options: [{"Basic", :basic}, {"Pro", :pro}, {"Team", :team}]] ++ props)
+    end
+
+    test "marks the selected row and pads the others" do
+      buffer = TestRenderer.render(plans(value: :pro), 10, 3)
+
+      assert Buffer.to_text(buffer) ==
+               """
+                 Basic
+               ❯ Pro
+                 Team
+               """
+               |> String.trim_trailing()
+    end
+
+    test "selected row gets bold by default, others do not" do
+      buffer = TestRenderer.render(plans(value: :pro), 10, 3)
+
+      assert %Cell{char: "P", attrs: [:bold]} = Buffer.at(buffer, 2, 1)
+      assert %Cell{char: "B", attrs: []} = Buffer.at(buffer, 2, 0)
+    end
+
+    test "selected_fg and selected_attrs override the defaults" do
+      buffer =
+        TestRenderer.render(
+          plans(value: :pro, selected_fg: :cyan, selected_attrs: [:underline]),
+          10,
+          3
+        )
+
+      assert %Cell{char: "P", fg: :cyan, attrs: [:underline]} = Buffer.at(buffer, 2, 1)
+    end
+
+    test "no selection renders all rows padded" do
+      buffer = TestRenderer.render(plans(), 10, 3)
+
+      assert Buffer.to_text(buffer) ==
+               """
+                 Basic
+                 Pro
+                 Team
+               """
+               |> String.trim_trailing()
+    end
+
+    test "scrolls to keep the selection visible" do
+      buffer = TestRenderer.render(plans(value: :team, height: 2), 10, 2)
+
+      assert Buffer.to_text(buffer) ==
+               """
+                 Pro
+               ❯ Team
+               """
+               |> String.trim_trailing()
+    end
+
+    test "custom marker" do
+      buffer = TestRenderer.render(plans(value: :basic, marker: "> "), 10, 3)
+      assert %Cell{char: ">"} = Buffer.at(buffer, 0, 0)
+    end
+
+    test "sizes intrinsically to marker + widest label and option count" do
+      element =
+        box flex_direction: :row do
+          plans()
+        end
+
+      buffer = TestRenderer.render(element, 20, 5)
+
+      # "❯ " (2) + "Basic" (5) = 7 wide, 3 rows (the 20x5 buffer leaves
+      # trailing blank rows).
+      assert buffer |> Buffer.to_text() |> String.trim_trailing() ==
+               """
+                 Basic
+                 Pro
+                 Team
+               """
+               |> String.trim_trailing()
+    end
+
+    test "select is focusable by default and requires an id" do
+      assert Tuix.Focus.order(box(do: plans())) == [:plan]
+
+      assert_raise ArgumentError, ~r/requires an :id prop/, fn ->
+        select(options: ["nope"])
       end
     end
   end
