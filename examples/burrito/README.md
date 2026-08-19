@@ -67,7 +67,8 @@ their status:
 
 1. [burrito#215](https://github.com/burrito-elixir/burrito/issues/215) -
    Burrito's precompiled ERTS builds lack tty support (raw mode returns
-   `{:error, :enotsup}`). Workaround: point `BURRITO_CUSTOM_ERTS` at a
+   `{:error, :enotsup}`; root cause tracked in
+   [beam-machine#6](https://github.com/doawoo/beam-machine/issues/6)). Workaround: point `BURRITO_CUSTOM_ERTS` at a
    local OTP root (e.g. your version manager's install directory); this
    example's `mix.exs` picks it up automatically:
 
@@ -80,12 +81,14 @@ their status:
    the wrapper pipes the BEAM's stdout, so the VM never sees a TTY: no
    ANSI detection, no raw mode, and keyboard input is never delivered.
    No workaround short of patching `deps/burrito/src/erlang_launcher.zig`
-   to inherit stdout.
+   to inherit stdout. Fix proposed upstream in
+   [burrito#235](https://github.com/burrito-elixir/burrito/pull/235).
 
 3. [burrito#233](https://github.com/burrito-elixir/burrito/issues/233) -
    `-mode embedded` is passed as a single argv string, so the VM boots
    in interactive mode. Harmless for this example (Tuix loads the app
-   module explicitly), but worth knowing.
+   module explicitly), but worth knowing. Fix proposed in
+   [burrito#236](https://github.com/burrito-elixir/burrito/pull/236).
 
 Relatedly, [burrito#229](https://github.com/burrito-elixir/burrito/issues/229)
 (the VM halting after boot) is why this example runs the TUI

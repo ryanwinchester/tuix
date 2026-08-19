@@ -147,7 +147,9 @@ their status:
 
 1. [burrito#215](https://github.com/burrito-elixir/burrito/issues/215) —
    Burrito's precompiled ERTS builds lack tty support: raw mode returns
-   `{:error, :enotsup}` and `Tuix.run/2` cannot take over the terminal.
+   `{:error, :enotsup}` and `Tuix.run/2` cannot take over the terminal
+   (root cause: the builds are configured with `--without-termcap`, see
+   [beam-machine#6](https://github.com/doawoo/beam-machine/issues/6)).
    **Workaround:** pass `custom_erts` in the target definition, pointing
    at a local OTP install root (the directory containing `erts-*` and
    `lib`), e.g.:
@@ -164,12 +166,14 @@ their status:
    the launcher pipes the BEAM's stdout through the wrapper, so the VM
    never sees a TTY: ANSI detection fails, raw mode is unsupported, and
    keyboard input is never delivered. No workaround short of patching
-   Burrito; wait for the upstream fix before shipping.
+   Burrito; a fix is proposed in
+   [burrito#235](https://github.com/burrito-elixir/burrito/pull/235).
 
-3. [burrito#233](https://github.com/burrito-elixir/burrito/issues/233) —
+3. [burrito#233](https://github.com/burrito-elixir/burrito/issues/233) -
    `-mode embedded` is passed as a single argv string, so the VM boots
    in interactive mode rather than embedded mode. Not fatal for Tuix
-   apps, but embedded-mode guarantees are silently lost.
+   apps, but embedded-mode guarantees are silently lost. Fix proposed
+   in [burrito#236](https://github.com/burrito-elixir/burrito/pull/236).
 
 The [`examples/burrito`](https://github.com/ryanwinchester/tuix/tree/main/examples/burrito)
 project tracks these and documents the exact state of what works.
