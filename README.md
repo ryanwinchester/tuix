@@ -402,13 +402,7 @@ reaction. Items with more upvotes will receive more attention.
 
 ## Documentation
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc):
-
-```sh
-mix docs
-```
-
-Once published, the docs can be found at <https://hexdocs.pm/tuix>.
+The docs can be found at <https://hexdocs.pm/tuix>.
 
 ## Demo video
 
