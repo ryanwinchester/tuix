@@ -174,6 +174,25 @@ their status:
 The [`examples/burrito`](https://github.com/ryanwinchester/tuix/tree/main/examples/burrito)
 project tracks these and documents the exact state of what works.
 
+### What about Burrito 1.5?
+
+Burrito 1.5 predates both 1.6 regressions: its launcher never actually
+ran Elixir's CLI (so the VM was not halted, [burrito#229](https://github.com/burrito-elixir/burrito/issues/229))
+and it did not pipe the BEAM's stdout ([burrito#234](https://github.com/burrito-elixir/burrito/issues/234)).
+[Expert](https://github.com/expert-lsp/expert/pull/844) (the Elixir
+LSP) downgraded to 1.5 over #229 for exactly this reason. With the
+`custom_erts` workaround for
+[burrito#215](https://github.com/burrito-elixir/burrito/issues/215)
+(which affects all versions), 1.5 is plausibly the most workable
+release for TUI apps today.
+
+The catch: **Burrito 1.5 requires Zig 0.15.2, which cannot link
+against the macOS 26 SDK** — builds fail with undefined-symbol errors
+(`__availability_version_check`, `_sysctlbyname`, ...) for *any*
+target, including cross-compiles to Linux. Verified on macOS 26/arm64.
+If your build host is Linux or an older macOS, 1.5 + `custom_erts` is
+worth trying; on current macOS only 1.6 builds at all.
+
 ## Windows
 
 Untested. Tuix relies on `SIGWINCH` for resize events where available

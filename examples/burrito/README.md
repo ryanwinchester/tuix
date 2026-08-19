@@ -92,3 +92,9 @@ Relatedly, [burrito#229](https://github.com/burrito-elixir/burrito/issues/229)
 synchronously inside `Application.start/2` - see
 `lib/counter/application.ex`. That pattern works on all Burrito
 versions, with or without the upstream fix.
+
+Burrito 1.5 predates issues 2 and 3 and may work with only the
+`custom_erts` workaround **if your build host can run it** - its
+required Zig (0.15.2) cannot link against the macOS 26 SDK, so 1.5
+does not build on current macOS at all (any target). See the
+packaging guide's "What about Burrito 1.5?" section.
