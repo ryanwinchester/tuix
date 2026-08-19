@@ -394,6 +394,9 @@ reaction. Items with more upvotes will receive more attention.
   ([#9](https://github.com/ryanwinchester/tuix/issues/9))
 - Kitty keyboard protocol
   ([#10](https://github.com/ryanwinchester/tuix/issues/10))
+- Multiline text input (textarea): line wrapping, vertical cursor
+  movement, `Shift+Enter` for newline
+  ([#13](https://github.com/ryanwinchester/tuix/issues/13))
 - Animation / frame-loop rendering mode
   ([#11](https://github.com/ryanwinchester/tuix/issues/11))
 
